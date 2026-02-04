@@ -1,0 +1,64 @@
+// ===== CARD DATA & GAME CONFIGURATION =====
+
+// Card definitions
+export const PLAYER_CARDS = [
+    { name: 'Virgil', pv: 3, maxPv: 3, na: 4, speed: 3 },
+    { name: 'Salvataggio', pv: 5, maxPv: 5, na: 1, speed: 2 },
+    { name: 'Origami', pv: 2, maxPv: 2, na: 3, speed: 4 },
+    { name: 'Rovi', pv: 2, maxPv: 2, na: 5, speed: 5 }
+];
+
+export const ENEMY_CARDS = [
+    { name: 'Virgil', pv: 3, maxPv: 3, na: 4, speed: 3 },
+    { name: 'Salvataggio', pv: 5, maxPv: 5, na: 1, speed: 2 },
+    { name: 'Origami', pv: 2, maxPv: 2, na: 3, speed: 4 },
+    { name: 'Rovi', pv: 2, maxPv: 2, na: 5, speed: 5 }
+];
+
+// AI Configuration
+export const AI_CONFIG = {
+    parrySuccessRate: 0.6,       // 60% chance to successfully parry
+    preferAliveTargets: true,    // Prefer lanes with alive player cards
+    selectionDelayMs: 1000,      // 1 second delay during selection
+    distributionDelayMs: 1500,   // 1.5 second delay during distribution
+    parryDelayMinMs: 50,         // Min delay before AI parry attempt
+    parryDelayMaxMs: 150         // Max delay before AI parry attempt
+};
+
+// Rally timing constants
+export const RALLY = {
+    NOTE_DURATION: 1200,     // ms for note to travel
+    PARRY_WINDOW: 200,       // ms timing window for parry
+    STACKED_NOTE_DELAY: 200, // ms gap between notes on same lane
+    IMPACT_DELAY: 300        // ms pause after note impact
+};
+
+// Stamina settings
+export const STAMINA = {
+    MAX: 5,
+    REGEN_PER_TURN: 2
+};
+
+// Visual configuration
+export const COLORS = {
+    enemyCard: { top: '#8b0000', bottom: '#4a0000' },
+    playerCard: { top: '#1e5128', bottom: '#0d2818' },
+    cardBorder: '#ffd700',
+    selectedBorder: '#ffea00',
+    text: '#ffffff',
+    heart: '#ff4757',
+    phases: {
+        SELECTION: '#3498db',
+        DISTRIBUTION: '#9b59b6',
+        RALLY: '#e74c3c',
+        END_TURN: '#2ecc71',
+        GAME_OVER: '#f39c12'
+    }
+};
+
+// Card dimensions
+export const CARD = {
+    WIDTH: 100,
+    HEIGHT: 130,
+    SPACING: 20
+};
