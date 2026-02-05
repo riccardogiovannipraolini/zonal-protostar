@@ -17,8 +17,11 @@ export const ENEMY_CARDS = [
 
 // AI Configuration
 export const AI_CONFIG = {
-    parrySuccessRate: 0.6,       // 60% chance to successfully parry
+    parrySuccessRate: 0.5,       // 50% base chance to successfully parry (reduced from 60%)
+    parryPenaltyPerBounce: 0.1,  // -10% per bounce (makes long rallies favor player)
     preferAliveTargets: true,    // Prefer lanes with alive player cards
+    focusFireChance: 0.3,        // 30% chance to focus fire on one lane
+    staminaSaveChance: 0.2,      // 20% chance to save stamina (not use all)
     selectionDelayMs: 1000,      // 1 second delay during selection
     distributionDelayMs: 1500,   // 1.5 second delay during distribution
     parryDelayMinMs: 50,         // Min delay before AI parry attempt
@@ -27,10 +30,15 @@ export const AI_CONFIG = {
 
 // Rally timing constants
 export const RALLY = {
-    NOTE_DURATION: 1200,     // ms for note to travel
+    NOTE_DURATION: 1200,     // ms for note to travel (base)
+    BASE_SPEED_MULTIPLIER: 1.3, // Global speed multiplier for all notes
     PARRY_WINDOW: 200,       // ms timing window for parry
     STACKED_NOTE_DELAY: 200, // ms gap between notes on same lane
-    IMPACT_DELAY: 300        // ms pause after note impact
+    IMPACT_DELAY: 300,       // ms pause after note impact
+    // Velocity stacking
+    SPEED_MULTIPLIER_PER_BOUNCE: 1.1,   // 10% faster each bounce
+    WINDOW_MULTIPLIER_PER_BOUNCE: 0.8,  // 20% smaller window each bounce
+    MAX_BOUNCES: 5                       // Stalemate after 5 bounces
 };
 
 // Stamina settings

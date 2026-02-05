@@ -10,7 +10,7 @@ import { createGameState, resetGameState } from './game/state.js';
 // Render imports
 import { initCanvas, clearCanvas, updateCardPositions, getCanvas } from './render/canvas.js';
 import { drawBattlefield, drawAllCards } from './render/cards.js';
-import { drawPhaseIndicator, drawStaminaBars, drawRegenAnimation, drawFloatingTexts, drawMessage, drawGameOverScreen } from './render/ui.js';
+import { drawPhaseIndicator, drawStaminaBars, drawRegenAnimation, drawFloatingTexts, drawMessage, drawGameOverScreen, drawBattleTimer } from './render/ui.js';
 import { drawNoteDistributionOverlay } from './render/distribution.js';
 import { drawRallyPhase } from './render/rally.js';
 
@@ -35,6 +35,7 @@ document.addEventListener('DOMContentLoaded', () => {
         updateCardPositions();
         drawBattlefield();
         drawPhaseIndicator(gameState);
+        drawBattleTimer(gameState);  // Battle timer (MM:SS)
         drawAllCards(gameState);
         drawStaminaBars(gameState);
         drawRegenAnimation(gameState);

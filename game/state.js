@@ -70,7 +70,10 @@ export function createGameState() {
         floatingTexts: [],
         gameOver: null,
         aiParryFlash: null,
-        playAgainButton: null
+        playAgainButton: null,
+
+        // Battle timer
+        battleStartTime: Date.now()
     };
 }
 
@@ -109,4 +112,7 @@ export function resetGameState(state) {
     state.floatingTexts = [];
     state.gameOver = null;
     state.aiParryFlash = null;
+
+    // Reset battle timer
+    state.battleStartTime = Date.now();
 }

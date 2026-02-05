@@ -53,6 +53,32 @@ export function drawPhaseIndicator(gameState) {
 }
 
 /**
+ * Draw battle timer (MM:SS format) in top right corner
+ */
+export function drawBattleTimer(gameState) {
+    if (!gameState.battleStartTime) return;
+
+    const ctx = getCtx();
+    const canvas = getCanvas();
+
+    const elapsed = Date.now() - gameState.battleStartTime;
+    const seconds = Math.floor(elapsed / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+
+    const timeString = `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
+
+    // Position: top right, below turn indicator
+    ctx.save();
+    ctx.fillStyle = '#aaaaaa';
+    ctx.font = '14px "Segoe UI", sans-serif';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'top';
+    ctx.fillText(`⏱ ${timeString}`, canvas.width - 15, 22);
+    ctx.restore();
+}
+
+/**
  * Draw a single stamina bar
  */
 function drawStaminaBar(x, y, width, height, current, max, side) {

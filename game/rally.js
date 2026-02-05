@@ -2,6 +2,7 @@
 
 import { RALLY, AI_CONFIG, CARD } from '../data/cards.js';
 import { layout } from '../render/canvas.js';
+import { initAudio, playParrySound, playHitSound, playStalemateSound, startTensionLoop, stopTensionLoop } from './audio.js';
 
 // Module-level references (set by init)
 let gameState = null;
@@ -83,13 +84,17 @@ export function spawnNextNote() {
     setTimeout(() => {
         if (!gameState.rallyState) return;
 
+        // Apply base speed multiplier
+        const baseDuration = RALLY.NOTE_DURATION / RALLY.BASE_SPEED_MULTIPLIER;
+
         gameState.currentNote = {
             lane: lane,
             progress: 0,
             startTime: Date.now(),
-            duration: RALLY.NOTE_DURATION,
+            duration: baseDuration,
             startX, startY, endX, endY,
-            direction: isPlayerAttacker ? 'toEnemy' : 'toPlayer'
+            direction: isPlayerAttacker ? 'toEnemy' : 'toPlayer',
+            bounceCount: 0
         };
 
         gameState.rallyState.bounceCount = 0;
@@ -117,11 +122,14 @@ function animateNote() {
     // Start timing indicator at 50% progress
     if (progress >= 0.5 && !gameState.timingIndicator) {
         const remainingTime = gameState.currentNote.duration * 0.5;
+        // Scale parry window based on bounce count
+        const bounceCount = gameState.currentNote.bounceCount || 0;
+        const scaledParryWindow = RALLY.PARRY_WINDOW * Math.pow(RALLY.WINDOW_MULTIPLIER_PER_BOUNCE, bounceCount);
 
         gameState.timingIndicator = {
             startTime: Date.now(),
             duration: remainingTime,
-            parryWindow: RALLY.PARRY_WINDOW
+            parryWindow: scaledParryWindow
         };
 
         // AI parry when defending
@@ -172,7 +180,14 @@ function scheduleAIParry(remainingTime) {
             return;
         }
 
-        const parrySuccess = Math.random() < AI_CONFIG.parrySuccessRate;
+        // Calculate parry success with bounce penalty
+        const bounceCount = gameState.currentNote.bounceCount || 0;
+        const baseRate = AI_CONFIG.parrySuccessRate;
+        const penalty = bounceCount * (AI_CONFIG.parryPenaltyPerBounce || 0.1);
+        const adjustedRate = Math.max(0.1, baseRate - penalty); // Min 10% success
+
+        const parrySuccess = Math.random() < adjustedRate;
+        console.log('[Rally] AI parry attempt - base:', baseRate, 'bounce:', bounceCount, 'adjusted:', adjustedRate.toFixed(2), 'success:', parrySuccess);
 
         // Visual flash
         gameState.aiParryFlash = {
@@ -181,27 +196,47 @@ function scheduleAIParry(remainingTime) {
         };
 
         gameState.parryAttempted = true;
-        console.log('[Rally] AI parryAttempted set to true, parrySuccess:', parrySuccess);
 
         if (parrySuccess) {
-            gameState.rallyResults.push({
-                lane: gameState.currentNote.lane,
-                result: 'PARRY'
-            });
-            showImpactFeedback('PARRY');
-            console.log('[Rally] AI PARRY success, scheduling next note in', RALLY.IMPACT_DELAY, 'ms');
+            // Check for stalemate first
+            const currentBounceCount = (gameState.currentNote.bounceCount || 0) + 1;
 
-            // Move to next note after delay
-            setTimeout(() => {
-                console.log('[Rally] Post-PARRY timeout fired, rallyState exists:', !!gameState.rallyState);
-                if (!gameState.rallyState) return;
-                gameState.timingIndicator = null;
-                gameState.aiParryFlash = null;
-                gameState.rallyState.currentLaneIndex++;
-                gameState.currentNote = null;
-                console.log('[Rally] Calling spawnNextNote after PARRY');
-                spawnNextNote();
-            }, RALLY.IMPACT_DELAY);
+            if (currentBounceCount >= RALLY.MAX_BOUNCES) {
+                // STALEMATE - max bounces reached
+                gameState.rallyResults.push({
+                    lane: gameState.currentNote.lane,
+                    result: 'STALEMATE'
+                });
+                showImpactFeedback('STALEMATE');
+                console.log('[Rally] AI STALEMATE - max bounces reached');
+
+                // Move to next note after delay
+                setTimeout(() => {
+                    if (!gameState.rallyState) return;
+                    gameState.timingIndicator = null;
+                    gameState.aiParryFlash = null;
+                    gameState.currentNote = null;
+                    gameState.rallyState.currentLaneIndex++;
+                    spawnNextNote();
+                }, RALLY.IMPACT_DELAY);
+            } else {
+                // Normal parry - BOUNCE NOTE BACK (bidirectional tennis!)
+                gameState.rallyResults.push({
+                    lane: gameState.currentNote.lane,
+                    result: 'PARRY'
+                });
+                showImpactFeedback('PARRY');
+                console.log('[Rally] AI PARRY success - bouncing note back to player!');
+
+                // Trigger spin animation then bounce note back
+                triggerSpinAnimation(() => {
+                    console.log('[Rally] Post-AI-PARRY spin finished, bouncing note');
+                    if (!gameState.rallyState) return;
+                    gameState.timingIndicator = null;
+                    gameState.aiParryFlash = null;
+                    bounceNote(); // CRITICAL: Bounce back, don't skip to next note!
+                });
+            }
         } else {
             // Failed parry = HIT
             showImpactFeedback('HIT');
@@ -279,7 +314,29 @@ export function attemptParry() {
     const isPerfect = msFromPerfect <= 50;
 
     if (timingProgress >= perfectStart && timingProgress <= 1) {
-        // PARRY SUCCESS - bounce note back
+        // PARRY SUCCESS - check for stalemate first
+        const currentBounceCount = (gameState.currentNote.bounceCount || 0) + 1;
+
+        if (currentBounceCount >= RALLY.MAX_BOUNCES) {
+            // STALEMATE - max bounces reached
+            gameState.rallyResults.push({
+                lane: gameState.currentNote.lane,
+                result: 'STALEMATE'
+            });
+            showImpactFeedback('STALEMATE');
+
+            // Move to next note after delay
+            setTimeout(() => {
+                if (!gameState.rallyState) return;
+                gameState.timingIndicator = null;
+                gameState.currentNote = null;
+                gameState.rallyState.currentLaneIndex++;
+                spawnNextNote();
+            }, RALLY.IMPACT_DELAY);
+            return;
+        }
+
+        // Normal parry - bounce note back
         gameState.rallyResults.push({
             lane: gameState.currentNote.lane,
             result: 'PARRY'
@@ -287,11 +344,11 @@ export function attemptParry() {
 
         showImpactFeedback(isPerfect ? 'PERFECT' : 'RETURN');
 
-        // Bounce after delay
-        setTimeout(() => {
+        // Trigger spin animation before bouncing
+        triggerSpinAnimation(() => {
             if (!gameState.rallyState) return;
             bounceNote();
-        }, 200);
+        });
     } else {
         // PARRY FAILED
         const defenderSide = gameState.rallyState.currentDefender;
@@ -306,30 +363,78 @@ export function attemptParry() {
 }
 
 /**
+ * Trigger spin animation on current note
+ */
+function triggerSpinAnimation(callback) {
+    if (!gameState.currentNote) {
+        callback();
+        return;
+    }
+
+    const duration = 300; // ms
+    const startTime = Date.now();
+    gameState.currentNote.isSpinning = true;
+
+    function animateSpin() {
+        if (!gameState.currentNote || !gameState.currentNote.isSpinning) return;
+
+        const elapsed = Date.now() - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+
+        gameState.currentNote.spinProgress = progress;
+        renderFn();
+
+        if (progress < 1) {
+            requestAnimationFrame(animateSpin);
+        } else {
+            gameState.currentNote.isSpinning = false;
+            callback();
+        }
+    }
+
+    requestAnimationFrame(animateSpin);
+}
+
+/**
  * Bounce note back to other side
  */
 function bounceNote() {
     if (!gameState.currentNote || !gameState.rallyState) return;
 
     const note = gameState.currentNote;
+    const newBounceCount = (note.bounceCount || 0) + 1;
+
+    // Calculate velocity-scaled duration (faster each bounce, starting from base speed)
+    const baseSpeed = RALLY.BASE_SPEED_MULTIPLIER || 1;
+    const bounceSpeedMultiplier = Math.pow(RALLY.SPEED_MULTIPLIER_PER_BOUNCE, newBounceCount);
+    const totalSpeedMultiplier = baseSpeed * bounceSpeedMultiplier;
+    const scaledDuration = RALLY.NOTE_DURATION / totalSpeedMultiplier;
+
+    console.log('[Rally] Bounce #' + newBounceCount + ' - Total Speed: ' + totalSpeedMultiplier.toFixed(2) + 'x, Duration: ' + scaledDuration.toFixed(0) + 'ms');
+
+    // Start tension audio at high bounces
+    if (newBounceCount >= 2) {
+        startTensionLoop(newBounceCount);
+    }
 
     gameState.currentNote = {
         lane: note.lane,
         progress: 0,
         startTime: Date.now(),
-        duration: RALLY.NOTE_DURATION,
+        duration: scaledDuration,
         startX: note.endX,
         startY: note.endY,
         endX: note.startX,
         endY: note.startY,
         direction: note.direction === 'toEnemy' ? 'toPlayer' : 'toEnemy',
-        bouncing: true
+        bouncing: true,
+        bounceCount: newBounceCount
     };
 
     // Swap defender
     gameState.rallyState.currentDefender =
         gameState.rallyState.currentDefender === 'player' ? 'enemy' : 'player';
-    gameState.rallyState.bounceCount++;
+    gameState.rallyState.bounceCount = newBounceCount;
 
     gameState.timingIndicator = null;
     gameState.parryAttempted = false;
@@ -350,15 +455,25 @@ function showImpactFeedback(result) {
     if (result === 'PERFECT') {
         text = '✨ PERFECT! ✨';
         color = '#ffd700';
+        playParrySound(gameState.currentNote.bounceCount || 0);
     } else if (result === 'RETURN') {
         text = '↩ RETURN!';
         color = '#f1c40f';
+        playParrySound(gameState.currentNote.bounceCount || 0);
     } else if (result === 'PARRY') {
         text = 'PARRY!';
         color = '#2ecc71';
+        playParrySound(gameState.currentNote.bounceCount || 0);
+    } else if (result === 'STALEMATE') {
+        text = '⚡ STALEMATE ⚡';
+        color = '#9b59b6';
+        playStalemateSound();
+        stopTensionLoop();
     } else {
         text = 'HIT!';
         color = '#e74c3c';
+        playHitSound();
+        stopTensionLoop();
     }
 
     // Add floating text
@@ -388,13 +503,18 @@ function showImpactFeedback(result) {
     };
     requestAnimationFrame(animateText);
 
-    // Shake on HIT
+    // Shake on HIT - intensity scales with bounce count
     if (result === 'HIT') {
         const defenderSide = gameState.rallyState.currentDefender;
+        const bounceCount = gameState.currentNote.bounceCount || 0;
+        // More shakes for higher bounce counts
+        const maxShakeFrames = 10 + (bounceCount * 2);
+
         gameState.shakeCard = {
             side: defenderSide,
             index: gameState.currentNote.lane,
-            frames: 0
+            frames: 0,
+            intensity: 1 + (bounceCount * 0.3) // Shake harder at high bounces
         };
 
         let shakeFrames = 0;
@@ -403,7 +523,7 @@ function showImpactFeedback(result) {
             gameState.shakeCard.frames = shakeFrames;
             renderFn();
 
-            if (shakeFrames >= 10) {
+            if (shakeFrames >= maxShakeFrames) {
                 clearInterval(shakeInterval);
                 gameState.shakeCard = null;
             }
@@ -445,9 +565,32 @@ export function finishRallyPhase() {
     const playerAlive = gameState.playerCards.some(c => c.pv > 0);
     const enemyAlive = gameState.enemyCards.some(c => c.pv > 0);
 
+    // Log battle duration helper
+    function logBattleDuration() {
+        if (gameState.battleStartTime) {
+            const elapsed = Date.now() - gameState.battleStartTime;
+            const seconds = Math.floor(elapsed / 1000);
+            const minutes = Math.floor(seconds / 60);
+            const remainingSeconds = seconds % 60;
+            const timeString = `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+
+            console.log(`[Battle] Duration: ${timeString} (${seconds}s total)`);
+
+            // Balance recommendations
+            if (seconds > 300) {
+                console.log('[Balance] Battle > 5 min - consider HIT = -2 PV');
+            } else if (seconds < 60) {
+                console.log('[Balance] Battle < 1 min - consider reducing note damage or adding PV');
+            } else {
+                console.log('[Balance] Battle duration is in target range (2-3 min)');
+            }
+        }
+    }
+
     if (!enemyAlive) {
         gameState.phase = 'GAME_OVER';
         gameState.gameOver = { winner: 'player', reason: 'All enemy cards destroyed!' };
+        logBattleDuration();
         cleanupRally();
         renderFn();
         return;
@@ -456,6 +599,7 @@ export function finishRallyPhase() {
     if (!playerAlive) {
         gameState.phase = 'GAME_OVER';
         gameState.gameOver = { winner: 'enemy', reason: 'All your cards destroyed!' };
+        logBattleDuration();
         cleanupRally();
         renderFn();
         return;
