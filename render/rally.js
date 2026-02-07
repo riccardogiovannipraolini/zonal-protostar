@@ -1,8 +1,8 @@
 // ===== RALLY PHASE RENDERING =====
-// Enhanced visual polish for velocity stacking
+// Enhanced visual polish for velocity stacking + vertical lanes
 
 import { CARD, RALLY } from '../data/cards.js';
-import { getCtx, getCanvas } from './canvas.js';
+import { getCtx, getCanvas, layout } from './canvas.js';
 
 /**
  * Get timing circle color based on bounce count
@@ -18,7 +18,6 @@ function getTimingCircleColor(bounceCount) {
  * Get timing circle scale (smaller = harder)
  */
 function getTimingCircleScale(bounceCount) {
-    // 100% -> 80% -> 60% -> 40% -> 20%
     const shrinkPerBounce = 0.20;
     return Math.max(0.20, 1 - (bounceCount * shrinkPerBounce));
 }
@@ -27,13 +26,13 @@ function getTimingCircleScale(bounceCount) {
  * Get rally counter color based on bounce count
  */
 function getRallyCounterColor(bounceCount) {
-    if (bounceCount >= 5) return '#ff3838';      // Red + flashing
-    if (bounceCount >= 3) return '#ffa502';      // Orange/yellow
-    return '#ffffff';                             // White
+    if (bounceCount >= 5) return '#ff3838';
+    if (bounceCount >= 3) return '#ffa502';
+    return '#ffffff';
 }
 
 /**
- * Get note color with DRAMATIC intensity based on bounce count
+ * Get note color with intensity based on bounce count
  */
 function getNoteColorWithIntensity(baseColor, bounceCount) {
     const hex = baseColor.replace('#', '');
@@ -41,13 +40,62 @@ function getNoteColorWithIntensity(baseColor, bounceCount) {
     let g = parseInt(hex.substring(2, 4), 16);
     let b = parseInt(hex.substring(4, 6), 16);
 
-    // DRAMATIC brightness increase: +50% per bounce
     const brightnessMultiplier = 1 + (bounceCount * 0.5);
     r = Math.min(255, Math.floor(r * brightnessMultiplier));
     g = Math.min(255, Math.floor(g * brightnessMultiplier));
     b = Math.min(255, Math.floor(b * brightnessMultiplier));
 
     return `rgb(${r}, ${g}, ${b})`;
+}
+
+/**
+ * Draw vertical lane indicators during rally with QWER labels
+ */
+function drawLaneIndicators(ctx, canvas, gameState) {
+    const enemyY = layout.cardPositions.enemy[0].y + CARD.HEIGHT;
+    const playerY = layout.cardPositions.player[0].y;
+    const labels = ['Q', 'W', 'E', 'R'];
+
+    for (let i = 0; i < 4; i++) {
+        const x = layout.cardPositions.player[i].x + CARD.WIDTH / 2;
+
+        // Check for flash effect on this lane
+        const isFlashing = gameState.laneFlash &&
+            gameState.laneFlash.lane === i &&
+            (Date.now() - gameState.laneFlash.startTime) < 200;
+
+        ctx.save();
+
+        // Lane flash overlay
+        if (isFlashing) {
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+            ctx.fillRect(x - 40, enemyY + 10, 80, playerY - enemyY - 20);
+        }
+
+        // Dashed lane line
+        ctx.strokeStyle = isFlashing ? 'rgba(255, 255, 255, 0.5)' : 'rgba(255, 255, 255, 0.1)';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([10, 10]);
+        ctx.beginPath();
+        ctx.moveTo(x, enemyY + 10);
+        ctx.lineTo(x, playerY - 10);
+        ctx.stroke();
+
+        // QWER label at top of lane
+        ctx.setLineDash([]);
+        ctx.fillStyle = isFlashing ? '#ffffff' : 'rgba(255, 255, 255, 0.4)';
+        ctx.font = 'bold 16px "Segoe UI", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(labels[i], x, enemyY + 25);
+
+        ctx.restore();
+    }
+
+    // Clear expired flash
+    if (gameState.laneFlash && (Date.now() - gameState.laneFlash.startTime) >= 200) {
+        gameState.laneFlash = null;
+    }
 }
 
 /**
@@ -70,41 +118,34 @@ function drawVignette(ctx, canvas, intensity) {
 }
 
 /**
- * Draw HUGE rally counter at top center
+ * Draw rally counter at top center
  */
 function drawRallyCounter(ctx, canvas, bounceCount) {
     if (bounceCount <= 0) return;
 
     ctx.save();
 
-    // Pulsing animation - grows with each bounce
     const pulseScale = 1 + Math.sin(Date.now() / 150) * 0.1;
-    const baseSize = 36 + (bounceCount * 4); // Gets bigger with bounces
+    const baseSize = 36 + (bounceCount * 4);
     const fontSize = Math.min(56, baseSize * pulseScale);
 
-    // Position: TOP CENTER
     const x = canvas.width / 2;
     const y = 50;
 
-    // Color with potential flash at max
     let color = getRallyCounterColor(bounceCount);
     if (bounceCount >= 5) {
-        // FLASHING at max bounces
         const flash = Math.sin(Date.now() / 100) > 0;
         color = flash ? '#ff3838' : '#fffa65';
     }
 
-    // Big glow
     ctx.shadowColor = color;
     ctx.shadowBlur = 20 + (bounceCount * 5);
 
-    // Text
     ctx.fillStyle = color;
     ctx.font = `bold ${fontSize}px "Segoe UI", sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 
-    // Draw text with outline for visibility
     ctx.strokeStyle = '#000000';
     ctx.lineWidth = 4;
     ctx.strokeText(`⚡ RALLY: ${bounceCount} ⚡`, x, y);
@@ -114,12 +155,12 @@ function drawRallyCounter(ctx, canvas, bounceCount) {
 }
 
 /**
- * Draw note with DRAMATIC glow effects
+ * Draw a single note with effects
  */
-function drawNote(ctx, note, bounceCount) {
-    const currentX = (typeof note.x !== 'undefined') ? note.x :
-        (note.startX + (note.endX - note.startX) * note.progress);
-    const currentY = (typeof note.y !== 'undefined') ? note.y :
+function drawNote(ctx, note) {
+    const bounceCount = note.bounceCount || 0;
+    const currentX = note.x !== undefined ? note.x : note.startX;
+    const currentY = note.y !== undefined ? note.y :
         (note.startY + (note.endY - note.startY) * note.progress);
 
     const baseNoteColor = (note.direction === 'toPlayer') ? '#e67e22' : '#9b59b6';
@@ -128,13 +169,13 @@ function drawNote(ctx, note, bounceCount) {
     ctx.save();
     ctx.translate(currentX, currentY);
 
-    // Pulsing scale - MORE INTENSE at high bounces
+    // Pulsing scale
     const basePulse = 1 + Math.sin(Date.now() / 100) * 0.1;
     const intensePulse = bounceCount >= 3 ? Math.sin(Date.now() / 50) * 0.2 : 0;
     const pulseScale = basePulse + intensePulse + (bounceCount * 0.05);
     ctx.scale(pulseScale, pulseScale);
 
-    // Apply spin rotation if active
+    // Spin rotation
     if (note.isSpinning) {
         const easeOutBack = (x) => {
             const c1 = 1.70158;
@@ -145,16 +186,12 @@ function drawNote(ctx, note, bounceCount) {
         ctx.rotate(rotation);
     }
 
-    // DRAMATIC glow - increases massively with bounces
-    // Bounce 0: 5px, 1: 15px, 2: 25px, 3: 40px, 4-5: 60px+
+    // Glow
     const glowRadius = 5 + (bounceCount * 15);
-    const glowOpacity = Math.min(1, 0.3 + (bounceCount * 0.2));
-
-    // Multiple glow layers for intensity
     ctx.shadowColor = noteColor;
     ctx.shadowBlur = glowRadius;
 
-    // Speed lines / trail behind note at high speeds
+    // Speed lines at high speeds
     if (bounceCount >= 2) {
         ctx.save();
         const trailLength = bounceCount * 3;
@@ -165,15 +202,15 @@ function drawNote(ctx, note, bounceCount) {
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
 
-            // Trail in opposite direction of movement
+            // Vertical trail (opposite direction of movement)
             const trailOffset = i * 6;
-            const trailX = note.direction === 'toPlayer' ? -trailOffset : trailOffset;
-            ctx.fillText('♪', trailX, 0);
+            const trailY = note.direction === 'toPlayer' ? -trailOffset : trailOffset;
+            ctx.fillText('♪', 0, trailY);
         }
         ctx.restore();
     }
 
-    // "ON FIRE" effect at bounce 3+
+    // Fire effect at bounce 3+
     if (bounceCount >= 3) {
         ctx.save();
         const fireColors = ['#ff9500', '#ff5722', '#ffeb3b', '#ff3838'];
@@ -202,50 +239,42 @@ function drawNote(ctx, note, bounceCount) {
 }
 
 /**
- * Draw timing indicator with VISIBLE SHRINK based on bounceCount
+ * Draw timing indicator for a note
  */
 function drawTimingIndicator(ctx, gameState, note) {
-    if (!gameState.timingIndicator) return;
+    if (!note.timingIndicator) return;
 
     const bounceCount = note.bounceCount || 0;
-    const elapsed = Date.now() - gameState.timingIndicator.startTime;
-    const progress = Math.min(elapsed / gameState.timingIndicator.duration, 1);
+    const elapsed = Date.now() - note.timingIndicator.startTime;
+    const progress = Math.min(elapsed / note.timingIndicator.duration, 1);
 
-    // BASE radius sizes
     const baseMaxRadius = CARD.WIDTH * 0.75;
     const baseMinRadius = CARD.WIDTH * 0.5;
 
-    // SHRINK the circle based on bounceCount - THIS IS THE KEY VISUAL!
     const circleScale = getTimingCircleScale(bounceCount);
     const maxRadius = baseMaxRadius * circleScale;
     const minRadius = baseMinRadius * circleScale;
     const currentRadius = maxRadius - (maxRadius - minRadius) * progress;
 
-    // Position at note's destination
     const centerX = note.endX;
     const centerY = note.endY;
 
-    // Color progression based on BOUNCE COUNT (not timing!)
     const circleColor = getTimingCircleColor(bounceCount);
 
-    // Change to green when in parry window
-    const perfectStart = 1 - (gameState.timingIndicator.parryWindow / gameState.timingIndicator.duration);
+    const perfectStart = 1 - (note.timingIndicator.parryWindow / note.timingIndicator.duration);
     const displayColor = progress >= perfectStart ? '#2ecc71' : circleColor;
 
     ctx.save();
 
-    // Thicker line at higher bounces for visibility
     ctx.strokeStyle = displayColor;
     ctx.lineWidth = 3 + (bounceCount * 0.5);
     ctx.shadowColor = displayColor;
     ctx.shadowBlur = 15 + (bounceCount * 5);
 
-    // Draw main circle
     ctx.beginPath();
     ctx.arc(centerX, centerY, currentRadius, 0, Math.PI * 2);
     ctx.stroke();
 
-    // Draw inner danger ring at high bounces
     if (bounceCount >= 3) {
         ctx.strokeStyle = circleColor;
         ctx.globalAlpha = 0.4;
@@ -266,35 +295,49 @@ function drawTimingIndicator(ctx, gameState, note) {
         ctx.shadowColor = '#000000';
         ctx.shadowBlur = 5;
 
-        // More urgent text at high bounces
-        const promptText = bounceCount >= 3 ? '⚡ QUICK! SPACE or CLICK ⚡' : 'PRESS SPACE or CLICK';
+        const promptText = bounceCount >= 3 ? '⚡ QUICK! Q/W/E/R ⚡' : 'PRESS Q/W/E/R TO PARRY';
         ctx.fillText(promptText, centerX, centerY + currentRadius + 20);
         ctx.restore();
     }
 }
 
 /**
- * Draw rally phase visuals (note animation and timing indicator) - ENHANCED
+ * Draw rally phase visuals - handles multiple simultaneous notes
  */
 export function drawRallyPhase(gameState) {
-    if (gameState.phase !== 'RALLY' || !gameState.currentNote) return;
+    if (gameState.phase !== 'RALLY') return;
 
     const ctx = getCtx();
     const canvas = getCanvas();
-    const note = gameState.currentNote;
-    const bounceCount = note.bounceCount || 0;
 
-    // Draw vignette effect during rallies (subtle focus)
-    if (bounceCount >= 1) {
-        drawVignette(ctx, canvas, bounceCount);
+    // Draw lane indicators with QWER labels
+    drawLaneIndicators(ctx, canvas, gameState);
+
+    // Handle multiple active notes OR single currentNote (for backwards compatibility)
+    const notes = gameState.activeNotes && gameState.activeNotes.length > 0
+        ? gameState.activeNotes.filter(n => !n.resolved)
+        : (gameState.currentNote ? [gameState.currentNote] : []);
+
+    if (notes.length === 0) return;
+
+    // Get max bounce count for vignette/counter
+    const maxBounce = Math.max(...notes.map(n => n.bounceCount || 0));
+
+    // Draw vignette effect
+    if (maxBounce >= 1) {
+        drawVignette(ctx, canvas, maxBounce);
     }
 
-    // Draw HUGE rally counter at top center
-    drawRallyCounter(ctx, canvas, bounceCount);
+    // Draw rally counter
+    drawRallyCounter(ctx, canvas, maxBounce);
 
-    // Draw note with enhanced glow effects
-    drawNote(ctx, note, bounceCount);
+    // Draw all active notes
+    notes.forEach(note => {
+        drawNote(ctx, note);
 
-    // Draw timing indicator with VISIBLE shrink
-    drawTimingIndicator(ctx, gameState, note);
+        // Draw timing indicator for notes with indicators
+        if (note.timingIndicator) {
+            drawTimingIndicator(ctx, gameState, note);
+        }
+    });
 }

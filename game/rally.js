@@ -1,7 +1,8 @@
 // ===== RALLY PHASE GAME LOGIC =====
+// Vertical lanes + simultaneous launch system
 
 import { RALLY, AI_CONFIG, CARD } from '../data/cards.js';
-import { layout } from '../render/canvas.js';
+import { layout, getCanvas } from '../render/canvas.js';
 import { initAudio, playParrySound, playHitSound, playStalemateSound, startTensionLoop, stopTensionLoop } from './audio.js';
 
 // Module-level references (set by init)
@@ -19,156 +20,191 @@ export function initRally(state, render, endTurn) {
 }
 
 /**
- * Start rally phase with given attacker
+ * Get lane center X position
+ */
+function getLaneCenterX(laneIndex) {
+    const pos = layout.cardPositions.player[laneIndex] || layout.cardPositions.enemy[laneIndex];
+    return pos ? pos.x + CARD.WIDTH / 2 : 0;
+}
+
+/**
+ * Get lane start/end Y positions based on direction
+ */
+function getLaneYPositions(isPlayerAttacker) {
+    const canvas = getCanvas();
+    const enemyCardY = layout.cardPositions.enemy[0].y + CARD.HEIGHT / 2;
+    const playerCardY = layout.cardPositions.player[0].y + CARD.HEIGHT / 2;
+
+    if (isPlayerAttacker) {
+        // Player attacking: notes travel from bottom (player) to top (enemy)
+        return { startY: playerCardY, endY: enemyCardY };
+    } else {
+        // Enemy attacking: notes travel from top (enemy) to bottom (player)
+        return { startY: enemyCardY, endY: playerCardY };
+    }
+}
+
+/**
+ * Start rally phase with simultaneous note spawning
  */
 export function startRallyPhase(attacker, attackerIndex) {
+    const isPlayerAttacker = attacker === 'player';
+    const defenderCards = isPlayerAttacker ? gameState.enemyCards : gameState.playerCards;
+
+    // Group notes by lane
+    const notesByLane = {};
+    gameState.assignedNotes.forEach(lane => {
+        if (!notesByLane[lane]) notesByLane[lane] = [];
+        notesByLane[lane].push(lane);
+    });
+
+    // Filter out destroyed targets
+    const validLanes = Object.keys(notesByLane).filter(lane => {
+        return defenderCards[parseInt(lane)].pv > 0;
+    });
+
+    if (validLanes.length === 0) {
+        // No valid targets, skip rally
+        console.log('[Rally] No valid targets, skipping rally');
+        if (endTurnFn) endTurnFn(attacker);
+        return;
+    }
+
     gameState.rallyState = {
         attacker: attacker,
         attackerIndex: attackerIndex,
         lanes: [...gameState.assignedNotes],
-        currentLaneIndex: 0,
-        currentDefender: attacker === 'player' ? 'enemy' : 'player',
-        bounceCount: 0
+        notesByLane: notesByLane,
+        currentDefender: isPlayerAttacker ? 'enemy' : 'player',
+        pendingNotes: [], // Notes waiting to spawn (with delays)
+        completedNotes: 0,
+        totalNotes: gameState.assignedNotes.length
     };
 
+    gameState.activeNotes = []; // Multiple notes can be active at once
     gameState.rallyResults = [];
     gameState.phase = 'RALLY';
 
-    spawnNextNote();
+    // Schedule all note spawns
+    scheduleNoteSpawns(isPlayerAttacker, notesByLane);
 }
 
 /**
- * Spawn the next note in sequence
+ * Schedule note spawns with simultaneous launch for different lanes
  */
-export function spawnNextNote() {
-    console.log('[Rally] spawnNextNote called, currentLaneIndex:', gameState.rallyState?.currentLaneIndex, 'lanes:', gameState.rallyState?.lanes);
+function scheduleNoteSpawns(isPlayerAttacker, notesByLane) {
+    const { startY, endY } = getLaneYPositions(isPlayerAttacker);
+    const baseDuration = RALLY.NOTE_DURATION / RALLY.BASE_SPEED_MULTIPLIER;
 
-    if (!gameState.rallyState || gameState.rallyState.currentLaneIndex >= gameState.rallyState.lanes.length) {
-        console.log('[Rally] All notes processed, calling finishRallyPhase');
-        finishRallyPhase();
-        return;
-    }
+    Object.keys(notesByLane).forEach(laneStr => {
+        const lane = parseInt(laneStr);
+        const notesInLane = notesByLane[laneStr];
+        const laneX = getLaneCenterX(lane);
 
-    const isPlayerAttacker = gameState.rallyState.attacker === 'player';
-    const defenderCards = isPlayerAttacker ? gameState.enemyCards : gameState.playerCards;
-    const lane = gameState.rallyState.lanes[gameState.rallyState.currentLaneIndex];
-    const defenderCard = defenderCards[lane];
+        notesInLane.forEach((_, noteIndex) => {
+            // First note in each lane spawns at t=0
+            // Subsequent notes in same lane spawn with STACKED_NOTE_DELAY
+            const delay = noteIndex * RALLY.STACKED_NOTE_DELAY;
 
-    // Skip destroyed targets
-    if (defenderCard.pv <= 0) {
-        gameState.rallyState.currentLaneIndex++;
-        spawnNextNote();
-        return;
-    }
+            setTimeout(() => {
+                if (!gameState.rallyState) return;
 
-    // Calculate positions
-    const attackerPos = isPlayerAttacker ?
-        layout.cardPositions.player[gameState.rallyState.attackerIndex] :
-        layout.cardPositions.enemy[gameState.rallyState.attackerIndex];
+                const note = {
+                    id: `${lane}-${noteIndex}`,
+                    lane: lane,
+                    progress: 0,
+                    startTime: Date.now(),
+                    duration: baseDuration,
+                    startX: laneX,
+                    startY: startY,
+                    endX: laneX,  // Same X - vertical movement only
+                    endY: endY,
+                    direction: isPlayerAttacker ? 'toEnemy' : 'toPlayer',
+                    bounceCount: 0,
+                    resolved: false,
+                    parryAttempted: false
+                };
 
-    const defenderPos = isPlayerAttacker ?
-        layout.cardPositions.enemy[lane] :
-        layout.cardPositions.player[lane];
+                gameState.activeNotes.push(note);
+                console.log(`[Rally] Spawned note ${note.id} at t=${delay}ms on lane ${lane}`);
 
-    const startX = attackerPos.x + CARD.WIDTH / 2;
-    const startY = attackerPos.y + CARD.HEIGHT / 2;
-    const endX = defenderPos.x + CARD.WIDTH / 2;
-    const endY = defenderPos.y + CARD.HEIGHT / 2;
-
-    // Check for stacked note delay
-    const currentLaneIdx = gameState.rallyState.currentLaneIndex;
-    const previousLane = currentLaneIdx > 0 ? gameState.rallyState.lanes[currentLaneIdx - 1] : null;
-    const isStackedNote = previousLane === lane;
-    const spawnDelay = isStackedNote ? RALLY.STACKED_NOTE_DELAY : 0;
-
-    setTimeout(() => {
-        if (!gameState.rallyState) return;
-
-        // Apply base speed multiplier
-        const baseDuration = RALLY.NOTE_DURATION / RALLY.BASE_SPEED_MULTIPLIER;
-
-        gameState.currentNote = {
-            lane: lane,
-            progress: 0,
-            startTime: Date.now(),
-            duration: baseDuration,
-            startX, startY, endX, endY,
-            direction: isPlayerAttacker ? 'toEnemy' : 'toPlayer',
-            bounceCount: 0
-        };
-
-        gameState.rallyState.bounceCount = 0;
-        gameState.rallyState.currentDefender = isPlayerAttacker ? 'enemy' : 'player';
-        gameState.timingIndicator = null;
-        gameState.parryAttempted = false;
-
-        animateNote();
-    }, spawnDelay);
+                // Start animation loop if this is the first note
+                if (gameState.activeNotes.length === 1) {
+                    animateNotes();
+                }
+            }, delay);
+        });
+    });
 }
 
 /**
- * Animate note movement using requestAnimationFrame
+ * Animate all active notes using requestAnimationFrame
  */
-function animateNote() {
-    if (!gameState.currentNote || !gameState.rallyState) return;
+function animateNotes() {
+    if (!gameState.rallyState || gameState.activeNotes.length === 0) {
+        // Check if rally is complete
+        checkRallyComplete();
+        return;
+    }
 
-    const elapsed = Date.now() - gameState.currentNote.startTime;
-    const progress = Math.min(elapsed / gameState.currentNote.duration, 1);
+    let anyNoteActive = false;
 
-    gameState.currentNote.progress = progress;
-    gameState.currentNote.x = gameState.currentNote.startX + (gameState.currentNote.endX - gameState.currentNote.startX) * progress;
-    gameState.currentNote.y = gameState.currentNote.startY + (gameState.currentNote.endY - gameState.currentNote.startY) * progress;
+    gameState.activeNotes.forEach(note => {
+        if (note.resolved) return;
 
-    // Start timing indicator at 50% progress
-    if (progress >= 0.5 && !gameState.timingIndicator) {
-        const remainingTime = gameState.currentNote.duration * 0.5;
-        // Scale parry window based on bounce count
-        const bounceCount = gameState.currentNote.bounceCount || 0;
-        const scaledParryWindow = RALLY.PARRY_WINDOW * Math.pow(RALLY.WINDOW_MULTIPLIER_PER_BOUNCE, bounceCount);
+        const elapsed = Date.now() - note.startTime;
+        const progress = Math.min(elapsed / note.duration, 1);
 
-        gameState.timingIndicator = {
-            startTime: Date.now(),
-            duration: remainingTime,
-            parryWindow: scaledParryWindow
-        };
+        note.progress = progress;
+        note.x = note.startX; // X stays constant (vertical movement)
+        note.y = note.startY + (note.endY - note.startY) * progress;
 
-        // AI parry when defending
-        if (gameState.rallyState.currentDefender === 'enemy') {
-            scheduleAIParry(remainingTime);
+        // Start timing indicator at 50% progress for player-defending notes
+        if (progress >= 0.5 && !note.timingIndicator) {
+            const remainingTime = note.duration * 0.5;
+            const scaledParryWindow = RALLY.PARRY_WINDOW * Math.pow(RALLY.WINDOW_MULTIPLIER_PER_BOUNCE, note.bounceCount);
+
+            note.timingIndicator = {
+                startTime: Date.now(),
+                duration: remainingTime,
+                parryWindow: scaledParryWindow
+            };
+
+            // Set as current note for parry input (first unresolved note with indicator)
+            if (!gameState.currentNote || gameState.currentNote.resolved) {
+                gameState.currentNote = note;
+                gameState.timingIndicator = note.timingIndicator;
+            }
+
+            // AI parry when defending
+            if (gameState.rallyState.currentDefender === 'enemy' && !note.aiParryScheduled) {
+                note.aiParryScheduled = true;
+                scheduleAIParryForNote(note, remainingTime);
+            }
         }
-    }
+
+        if (progress < 1) {
+            anyNoteActive = true;
+        } else if (!note.parryAttempted) {
+            // Note reached target without parry - it's a HIT
+            handleNoteImpact(note);
+        }
+    });
 
     renderFn();
 
-    if (progress < 1) {
-        requestAnimationFrame(animateNote);
-    } else if (!gameState.parryAttempted) {
-        // Note reached target without parry - it's a HIT
-        handleNoteImpact();
+    if (anyNoteActive || gameState.activeNotes.some(n => !n.resolved)) {
+        requestAnimationFrame(animateNotes);
     } else {
-        // Parry was attempted - AI setTimeout should handle transition
-        // But add a fallback in case the setTimeout fails
-        console.log('[Rally] Animation ended with parryAttempted=true, waiting for AI callback...');
-
-        // Fallback: if nothing happens within 500ms, force transition
-        setTimeout(() => {
-            if (gameState.phase === 'RALLY' && gameState.currentNote && gameState.currentNote.progress >= 1) {
-                console.log('[Rally] FALLBACK: Forcing transition after parry timeout');
-                gameState.timingIndicator = null;
-                gameState.aiParryFlash = null;
-                gameState.rallyState.currentLaneIndex++;
-                gameState.currentNote = null;
-                spawnNextNote();
-            }
-        }, 500);
+        checkRallyComplete();
     }
 }
 
 /**
- * Schedule AI parry attempt
+ * Schedule AI parry for a specific note
  */
-function scheduleAIParry(remainingTime) {
-    const parryWindow = gameState.timingIndicator.parryWindow;
+function scheduleAIParryForNote(note, remainingTime) {
+    const parryWindow = note.timingIndicator.parryWindow;
     const perfectStart = 1 - (parryWindow / remainingTime);
 
     const aiDelay = AI_CONFIG.parryDelayMinMs +
@@ -176,87 +212,56 @@ function scheduleAIParry(remainingTime) {
     const targetTime = remainingTime * perfectStart + aiDelay;
 
     setTimeout(() => {
-        if (!gameState.currentNote || !gameState.timingIndicator || gameState.parryAttempted) {
-            return;
-        }
+        if (!note || note.resolved || note.parryAttempted) return;
 
         // Calculate parry success with bounce penalty
-        const bounceCount = gameState.currentNote.bounceCount || 0;
+        const bounceCount = note.bounceCount || 0;
         const baseRate = AI_CONFIG.parrySuccessRate;
         const penalty = bounceCount * (AI_CONFIG.parryPenaltyPerBounce || 0.1);
-        const adjustedRate = Math.max(0.1, baseRate - penalty); // Min 10% success
+        const adjustedRate = Math.max(0.1, baseRate - penalty);
 
         const parrySuccess = Math.random() < adjustedRate;
-        console.log('[Rally] AI parry attempt - base:', baseRate, 'bounce:', bounceCount, 'adjusted:', adjustedRate.toFixed(2), 'success:', parrySuccess);
+        console.log('[Rally] AI parry attempt on note', note.id, '- success:', parrySuccess);
 
         // Visual flash
         gameState.aiParryFlash = {
-            cardIndex: gameState.currentNote.lane,
+            cardIndex: note.lane,
             startTime: Date.now()
         };
 
-        gameState.parryAttempted = true;
+        note.parryAttempted = true;
 
         if (parrySuccess) {
-            // Check for stalemate first
-            const currentBounceCount = (gameState.currentNote.bounceCount || 0) + 1;
+            const currentBounceCount = (note.bounceCount || 0) + 1;
 
             if (currentBounceCount >= RALLY.MAX_BOUNCES) {
-                // STALEMATE - max bounces reached
-                gameState.rallyResults.push({
-                    lane: gameState.currentNote.lane,
-                    result: 'STALEMATE'
-                });
-                showImpactFeedback('STALEMATE');
-                console.log('[Rally] AI STALEMATE - max bounces reached');
-
-                // Move to next note after delay
-                setTimeout(() => {
-                    if (!gameState.rallyState) return;
-                    gameState.timingIndicator = null;
-                    gameState.aiParryFlash = null;
-                    gameState.currentNote = null;
-                    gameState.rallyState.currentLaneIndex++;
-                    spawnNextNote();
-                }, RALLY.IMPACT_DELAY);
+                // STALEMATE
+                gameState.rallyResults.push({ lane: note.lane, result: 'STALEMATE' });
+                showImpactFeedback('STALEMATE', note);
+                note.resolved = true;
+                gameState.rallyState.completedNotes++;
             } else {
-                // Normal parry - BOUNCE NOTE BACK (bidirectional tennis!)
-                gameState.rallyResults.push({
-                    lane: gameState.currentNote.lane,
-                    result: 'PARRY'
-                });
-                showImpactFeedback('PARRY');
-                console.log('[Rally] AI PARRY success - bouncing note back to player!');
+                // PARRY - bounce note back
+                gameState.rallyResults.push({ lane: note.lane, result: 'PARRY' });
+                showImpactFeedback('PARRY', note);
 
-                // Trigger spin animation then bounce note back
-                triggerSpinAnimation(() => {
-                    console.log('[Rally] Post-AI-PARRY spin finished, bouncing note');
+                triggerSpinAnimation(note, () => {
                     if (!gameState.rallyState) return;
-                    gameState.timingIndicator = null;
-                    gameState.aiParryFlash = null;
-                    bounceNote(); // CRITICAL: Bounce back, don't skip to next note!
+                    bounceNote(note);
                 });
             }
         } else {
             // Failed parry = HIT
-            showImpactFeedback('HIT');
+            showImpactFeedback('HIT', note);
             gameState.rallyResults.push({
-                lane: gameState.currentNote.lane,
+                lane: note.lane,
                 result: 'HIT',
                 damagedSide: 'enemy'
             });
-            console.log('[Rally] AI PARRY failed (HIT), scheduling next note in', RALLY.IMPACT_DELAY, 'ms');
 
-            // Move to next note after delay (same as successful parry)
             setTimeout(() => {
-                console.log('[Rally] Post-HIT timeout fired, rallyState exists:', !!gameState.rallyState);
-                if (!gameState.rallyState) return;
-                gameState.timingIndicator = null;
-                gameState.aiParryFlash = null;
-                gameState.rallyState.currentLaneIndex++;
-                gameState.currentNote = null;
-                console.log('[Rally] Calling spawnNextNote after HIT');
-                spawnNextNote();
+                note.resolved = true;
+                gameState.rallyState.completedNotes++;
             }, RALLY.IMPACT_DELAY);
         }
 
@@ -267,127 +272,123 @@ function scheduleAIParry(remainingTime) {
         }, 150);
 
     }, targetTime);
-
-    console.log('[Rally] AI parry scheduled for', targetTime, 'ms from now');
 }
 
 /**
  * Handle note impact (when note reaches target without parry)
  */
-function handleNoteImpact() {
+function handleNoteImpact(note) {
     const defenderSide = gameState.rallyState.currentDefender;
+    const defenderCards = defenderSide === 'player' ?
+        gameState.playerCards : gameState.enemyCards;
+    const targetCard = defenderCards[note.lane];
+
+    // Dead card = fizzle (no damage, note just disappears)
+    if (!targetCard || targetCard.pv <= 0) {
+        note.resolved = true;
+        gameState.rallyState.completedNotes++;
+        showImpactFeedback('FIZZLE', note);
+        return;
+    }
 
     gameState.rallyResults.push({
-        lane: gameState.currentNote.lane,
+        lane: note.lane,
         result: 'HIT',
         damagedSide: defenderSide
     });
 
-    showImpactFeedback('HIT');
-
-    // Move to next note after delay
-    setTimeout(() => {
-        if (!gameState.rallyState) return;
-        gameState.timingIndicator = null;
-        gameState.currentNote = null;
-        gameState.rallyState.currentLaneIndex++;
-        spawnNextNote();
-    }, RALLY.IMPACT_DELAY);
+    showImpactFeedback('HIT', note);
+    note.resolved = true;
+    gameState.rallyState.completedNotes++;
 }
 
 /**
- * Attempt player parry
+ * Attempt player parry on a specific lane (QWER keys)
+ * @param {number|null} targetLane - Lane to parry (0-3), or null for any lane
  */
-export function attemptParry() {
-    if (!gameState.currentNote || !gameState.timingIndicator || gameState.parryAttempted) {
-        return;
-    }
+export function attemptParry(targetLane = null) {
+    // Find note on the specified lane (or first unresolved if no lane specified)
+    const note = gameState.activeNotes.find(n =>
+        !n.resolved &&
+        !n.parryAttempted &&
+        n.timingIndicator &&
+        gameState.rallyState.currentDefender === 'player' &&
+        (targetLane === null || n.lane === targetLane)
+    );
 
-    gameState.parryAttempted = true;
+    if (!note) return;
 
-    const elapsed = Date.now() - gameState.timingIndicator.startTime;
-    const timingProgress = elapsed / gameState.timingIndicator.duration;
+    note.parryAttempted = true;
 
-    const perfectStart = 1 - (gameState.timingIndicator.parryWindow / gameState.timingIndicator.duration);
+    const elapsed = Date.now() - note.timingIndicator.startTime;
+    const duration = note.timingIndicator.duration;
+    const timingProgress = elapsed / duration;
+
+    const perfectStart = 1 - (note.timingIndicator.parryWindow / duration);
     const perfectCenter = (perfectStart + 1) / 2;
-    const msFromPerfect = Math.abs(elapsed - (perfectCenter * gameState.timingIndicator.duration));
+    const msFromPerfect = Math.abs(elapsed - (perfectCenter * duration));
     const isPerfect = msFromPerfect <= 50;
 
     if (timingProgress >= perfectStart && timingProgress <= 1) {
-        // PARRY SUCCESS - check for stalemate first
-        const currentBounceCount = (gameState.currentNote.bounceCount || 0) + 1;
+        // PARRY SUCCESS
+        const currentBounceCount = (note.bounceCount || 0) + 1;
 
         if (currentBounceCount >= RALLY.MAX_BOUNCES) {
-            // STALEMATE - max bounces reached
-            gameState.rallyResults.push({
-                lane: gameState.currentNote.lane,
-                result: 'STALEMATE'
-            });
-            showImpactFeedback('STALEMATE');
-
-            // Move to next note after delay
-            setTimeout(() => {
-                if (!gameState.rallyState) return;
-                gameState.timingIndicator = null;
-                gameState.currentNote = null;
-                gameState.rallyState.currentLaneIndex++;
-                spawnNextNote();
-            }, RALLY.IMPACT_DELAY);
+            // STALEMATE
+            gameState.rallyResults.push({ lane: note.lane, result: 'STALEMATE' });
+            showImpactFeedback('STALEMATE', note);
+            note.resolved = true;
+            gameState.rallyState.completedNotes++;
             return;
         }
 
         // Normal parry - bounce note back
-        gameState.rallyResults.push({
-            lane: gameState.currentNote.lane,
-            result: 'PARRY'
-        });
+        gameState.rallyResults.push({ lane: note.lane, result: 'PARRY' });
+        showImpactFeedback(isPerfect ? 'PERFECT' : 'RETURN', note);
 
-        showImpactFeedback(isPerfect ? 'PERFECT' : 'RETURN');
-
-        // Trigger spin animation before bouncing
-        triggerSpinAnimation(() => {
+        triggerSpinAnimation(note, () => {
             if (!gameState.rallyState) return;
-            bounceNote();
+            bounceNote(note);
         });
     } else {
         // PARRY FAILED
         const defenderSide = gameState.rallyState.currentDefender;
 
         gameState.rallyResults.push({
-            lane: gameState.currentNote.lane,
+            lane: note.lane,
             result: 'HIT',
             damagedSide: defenderSide
         });
-        showImpactFeedback('HIT');
+        showImpactFeedback('HIT', note);
+
+        setTimeout(() => {
+            note.resolved = true;
+            gameState.rallyState.completedNotes++;
+        }, RALLY.IMPACT_DELAY);
     }
 }
 
 /**
- * Trigger spin animation on current note
+ * Trigger spin animation on a note
  */
-function triggerSpinAnimation(callback) {
-    if (!gameState.currentNote) {
-        callback();
-        return;
-    }
-
-    const duration = 300; // ms
+function triggerSpinAnimation(note, callback) {
+    const duration = 300;
     const startTime = Date.now();
-    gameState.currentNote.isSpinning = true;
+    note.isSpinning = true;
 
     function animateSpin() {
-        if (!gameState.currentNote || !gameState.currentNote.isSpinning) return;
+        if (!note.isSpinning) return;
 
         const elapsed = Date.now() - startTime;
         const progress = Math.min(elapsed / duration, 1);
 
-        gameState.currentNote.spinProgress = progress;
+        note.spinProgress = progress;
         renderFn();
 
         if (progress < 1) {
             requestAnimationFrame(animateSpin);
         } else {
-            gameState.currentNote.isSpinning = false;
+            note.isSpinning = false;
             callback();
         }
     }
@@ -396,58 +397,59 @@ function triggerSpinAnimation(callback) {
 }
 
 /**
- * Bounce note back to other side
+ * Bounce note back to other side (vertical only)
  */
-function bounceNote() {
-    if (!gameState.currentNote || !gameState.rallyState) return;
+function bounceNote(note) {
+    if (!note || !gameState.rallyState) return;
 
-    const note = gameState.currentNote;
     const newBounceCount = (note.bounceCount || 0) + 1;
 
-    // Calculate velocity-scaled duration (faster each bounce, starting from base speed)
+    // Calculate velocity-scaled duration
     const baseSpeed = RALLY.BASE_SPEED_MULTIPLIER || 1;
     const bounceSpeedMultiplier = Math.pow(RALLY.SPEED_MULTIPLIER_PER_BOUNCE, newBounceCount);
     const totalSpeedMultiplier = baseSpeed * bounceSpeedMultiplier;
     const scaledDuration = RALLY.NOTE_DURATION / totalSpeedMultiplier;
 
-    console.log('[Rally] Bounce #' + newBounceCount + ' - Total Speed: ' + totalSpeedMultiplier.toFixed(2) + 'x, Duration: ' + scaledDuration.toFixed(0) + 'ms');
+    console.log('[Rally] Bounce #' + newBounceCount + ' - Speed: ' + totalSpeedMultiplier.toFixed(2) + 'x');
 
     // Start tension audio at high bounces
     if (newBounceCount >= 2) {
         startTensionLoop(newBounceCount);
     }
 
-    gameState.currentNote = {
-        lane: note.lane,
-        progress: 0,
-        startTime: Date.now(),
-        duration: scaledDuration,
-        startX: note.endX,
-        startY: note.endY,
-        endX: note.startX,
-        endY: note.startY,
-        direction: note.direction === 'toEnemy' ? 'toPlayer' : 'toEnemy',
-        bouncing: true,
-        bounceCount: newBounceCount
-    };
+    // Swap Y positions only - X stays fixed to lane
+    const newStartY = note.endY;
+    const newEndY = note.startY;
+
+    // Update note for bounce
+    note.startY = newStartY;
+    note.endY = newEndY;
+    note.progress = 0;
+    note.startTime = Date.now();
+    note.duration = scaledDuration;
+    note.direction = note.direction === 'toEnemy' ? 'toPlayer' : 'toEnemy';
+    note.bounceCount = newBounceCount;
+    note.parryAttempted = false;
+    note.timingIndicator = null;
+    note.aiParryScheduled = false;
 
     // Swap defender
     gameState.rallyState.currentDefender =
         gameState.rallyState.currentDefender === 'player' ? 'enemy' : 'player';
-    gameState.rallyState.bounceCount = newBounceCount;
 
+    // Update global state for input handling
+    gameState.currentNote = note;
     gameState.timingIndicator = null;
     gameState.parryAttempted = false;
 
-    animateNote();
+    // Continue animation
+    animateNotes();
 }
 
 /**
- * Show impact feedback (HIT!, PARRY!, etc.)
+ * Show impact feedback
  */
-function showImpactFeedback(result) {
-    const note = gameState.currentNote;
-
+function showImpactFeedback(result, note) {
     const x = note.endX;
     const y = note.endY - 40;
 
@@ -455,20 +457,24 @@ function showImpactFeedback(result) {
     if (result === 'PERFECT') {
         text = '✨ PERFECT! ✨';
         color = '#ffd700';
-        playParrySound(gameState.currentNote.bounceCount || 0);
+        playParrySound(note.bounceCount || 0);
     } else if (result === 'RETURN') {
         text = '↩ RETURN!';
         color = '#f1c40f';
-        playParrySound(gameState.currentNote.bounceCount || 0);
+        playParrySound(note.bounceCount || 0);
     } else if (result === 'PARRY') {
         text = 'PARRY!';
         color = '#2ecc71';
-        playParrySound(gameState.currentNote.bounceCount || 0);
+        playParrySound(note.bounceCount || 0);
     } else if (result === 'STALEMATE') {
         text = '⚡ STALEMATE ⚡';
         color = '#9b59b6';
         playStalemateSound();
         stopTensionLoop();
+    } else if (result === 'FIZZLE') {
+        text = '~poof~';
+        color = '#888888';
+        // No sound for fizzle
     } else {
         text = 'HIT!';
         color = '#e74c3c';
@@ -476,7 +482,6 @@ function showImpactFeedback(result) {
         stopTensionLoop();
     }
 
-    // Add floating text
     const floatingText = {
         text, x, y,
         opacity: 1,
@@ -485,7 +490,6 @@ function showImpactFeedback(result) {
     };
     gameState.floatingTexts.push(floatingText);
 
-    // Animate floating text
     const textDuration = 1000;
     const animateText = () => {
         const elapsed = Date.now() - floatingText.startTime;
@@ -503,18 +507,17 @@ function showImpactFeedback(result) {
     };
     requestAnimationFrame(animateText);
 
-    // Shake on HIT - intensity scales with bounce count
+    // Shake on HIT
     if (result === 'HIT') {
         const defenderSide = gameState.rallyState.currentDefender;
-        const bounceCount = gameState.currentNote.bounceCount || 0;
-        // More shakes for higher bounce counts
+        const bounceCount = note.bounceCount || 0;
         const maxShakeFrames = 10 + (bounceCount * 2);
 
         gameState.shakeCard = {
             side: defenderSide,
-            index: gameState.currentNote.lane,
+            index: note.lane,
             frames: 0,
-            intensity: 1 + (bounceCount * 0.3) // Shake harder at high bounces
+            intensity: 1 + (bounceCount * 0.3)
         };
 
         let shakeFrames = 0;
@@ -532,22 +535,31 @@ function showImpactFeedback(result) {
 }
 
 /**
+ * Check if rally is complete
+ */
+function checkRallyComplete() {
+    if (!gameState.rallyState) return;
+
+    const allResolved = gameState.activeNotes.every(n => n.resolved);
+
+    if (allResolved) {
+        console.log('[Rally] All notes resolved, finishing rally');
+        finishRallyPhase();
+    }
+}
+
+/**
  * Finish rally phase and apply damage
  */
 export function finishRallyPhase() {
-    console.log('[Rally] finishRallyPhase called, rallyState exists:', !!gameState.rallyState);
+    console.log('[Rally] finishRallyPhase called');
 
-    // Guard: if rallyState is already null, we can't proceed properly
     if (!gameState.rallyState) {
         console.error('[Rally] finishRallyPhase called but rallyState is null!');
-        // Still try to end the turn - default to player attacker
-        if (endTurnFn) {
-            endTurnFn('player');
-        }
+        if (endTurnFn) endTurnFn('player');
         return;
     }
 
-    // Save attacker before cleanup
     const isPlayerAttacker = gameState.rallyState.attacker === 'player';
 
     // Apply damage based on who got hit
@@ -565,7 +577,6 @@ export function finishRallyPhase() {
     const playerAlive = gameState.playerCards.some(c => c.pv > 0);
     const enemyAlive = gameState.enemyCards.some(c => c.pv > 0);
 
-    // Log battle duration helper
     function logBattleDuration() {
         if (gameState.battleStartTime) {
             const elapsed = Date.now() - gameState.battleStartTime;
@@ -573,17 +584,7 @@ export function finishRallyPhase() {
             const minutes = Math.floor(seconds / 60);
             const remainingSeconds = seconds % 60;
             const timeString = `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
-
             console.log(`[Battle] Duration: ${timeString} (${seconds}s total)`);
-
-            // Balance recommendations
-            if (seconds > 300) {
-                console.log('[Balance] Battle > 5 min - consider HIT = -2 PV');
-            } else if (seconds < 60) {
-                console.log('[Balance] Battle < 1 min - consider reducing note damage or adding PV');
-            } else {
-                console.log('[Balance] Battle duration is in target range (2-3 min)');
-            }
         }
     }
 
@@ -607,7 +608,6 @@ export function finishRallyPhase() {
 
     cleanupRally();
 
-    // Call endTurn to transition to next player
     if (endTurnFn) {
         endTurnFn(isPlayerAttacker ? 'player' : 'enemy');
     }
@@ -619,6 +619,7 @@ export function finishRallyPhase() {
 function cleanupRally() {
     gameState.rallyState = null;
     gameState.currentNote = null;
+    gameState.activeNotes = [];
     gameState.timingIndicator = null;
     gameState.assignedNotes = [];
 }
@@ -626,4 +627,10 @@ function cleanupRally() {
 // Export for external use
 export function getRallyAttacker() {
     return gameState.rallyState ? gameState.rallyState.attacker : null;
+}
+
+// Legacy export for compatibility
+export function spawnNextNote() {
+    // No longer used - simultaneous spawning now handled by scheduleNoteSpawns
+    console.warn('[Rally] spawnNextNote is deprecated');
 }

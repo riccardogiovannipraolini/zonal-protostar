@@ -36,19 +36,11 @@ export function createGameState() {
         }
         */
 
-        // Current note being animated
+        // Current note being animated (for backwards compatibility)
         currentNote: null,
-        /* currentNote structure:
-        {
-            lane: number,
-            progress: 0-1,
-            startTime: timestamp,
-            duration: ms,
-            startX, startY, endX, endY,
-            x, y, // Current position
-            direction: 'toEnemy'|'toPlayer'
-        }
-        */
+
+        // Multiple active notes for simultaneous launch
+        activeNotes: [],
 
         // Timing and results
         timingIndicator: null,
@@ -99,6 +91,7 @@ export function resetGameState(state) {
     // Reset rally
     state.rallyState = null;
     state.currentNote = null;
+    state.activeNotes = [];
     state.timingIndicator = null;
     state.rallyResults = [];
     state.parryAttempted = false;

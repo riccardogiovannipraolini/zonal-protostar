@@ -3,6 +3,7 @@
 
 import { AI_CONFIG } from '../data/cards.js';
 import { startRallyPhase } from './rally.js';
+import { isLanePlayable } from './rules.js';
 
 // Module-level references
 let gameState = null;
@@ -75,7 +76,7 @@ function distributeNotes(noteCount, aliveLanes) {
         // Focus on lowest PV player card
         const targetLane = findLowestPvPlayerLane();
 
-        if (targetLane >= 0 && aliveLanes.includes(targetLane)) {
+        if (targetLane >= 0 && aliveLanes.includes(targetLane) && isLanePlayable(gameState, targetLane)) {
             console.log('[AI] Focus fire on lane', targetLane, 'with', noteCount, 'notes');
             for (let i = 0; i < noteCount; i++) {
                 assignedNotes.push(targetLane);
@@ -132,8 +133,8 @@ export function aiTurn() {
             setTimeout(() => {
                 const aiCard = gameState.enemyCards[aiChoice.index];
 
-                // Get alive player lanes
-                const aliveLanes = [0, 1, 2, 3].filter(lane => gameState.playerCards[lane].pv > 0);
+                // Get playable lanes (both player and enemy cards must be alive)
+                const aliveLanes = [0, 1, 2, 3].filter(lane => isLanePlayable(gameState, lane));
 
                 // Max notes = min of card's NA, available lanes, and AI stamina
                 const maxNotes = Math.min(aiCard.na, aliveLanes.length, gameState.enemyStamina);

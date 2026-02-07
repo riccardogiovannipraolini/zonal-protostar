@@ -4,6 +4,7 @@ import { CARD } from '../data/cards.js';
 import { getCanvas, layout } from '../render/canvas.js';
 import { attemptParry, startRallyPhase } from './rally.js';
 import { resetGameState } from './state.js';
+import { isLanePlayable } from './rules.js';
 
 // Module-level references
 let gameState = null;
@@ -133,6 +134,9 @@ function handleDistributionClick(x, y) {
 
             if (lane.disabled) return;
 
+            // Playable lanes rule check
+            if (!isLanePlayable(gameState, i)) return;
+
             const notesInLane = gameState.assignedNotes.filter(n => n === i).length;
 
             if (gameState.assignedNotes.length < maxNotes) {
@@ -178,13 +182,28 @@ function handleContextMenu(event) {
 }
 
 /**
- * Handle keyboard input
+ * Handle keyboard input - QWER for lane-specific parry
  */
 function handleKeyDown(event) {
-    if (event.code === 'Space' && gameState.phase === 'RALLY' &&
-        gameState.currentNote && gameState.timingIndicator) {
+    if (gameState.phase !== 'RALLY' || gameState.rallyState?.currentDefender !== 'player') {
+        return;
+    }
+
+    // QWER = lanes 0-3
+    const keyToLane = { 'q': 0, 'w': 1, 'e': 2, 'r': 3 };
+    const key = event.key.toLowerCase();
+    const lane = keyToLane[key];
+
+    if (lane !== undefined) {
         event.preventDefault();
-        attemptParry();
+
+        // Visual flash feedback (even if no note on that lane)
+        gameState.laneFlash = { lane, startTime: Date.now() };
+
+        // Attempt parry on specific lane
+        attemptParry(lane);
+
+        renderFn();
     }
 }
 

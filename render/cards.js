@@ -103,6 +103,10 @@ export function drawCard(x, y, card, isEnemy, index, gameState) {
         bgGradient.addColorStop(1, gradient.bottom);
     }
 
+    if (isDead) {
+        ctx.globalAlpha = 0.5;
+    }
+
     ctx.fillStyle = bgGradient;
     ctx.beginPath();
     ctx.roundRect(x, y, CARD.WIDTH, CARD.HEIGHT, 8);
@@ -206,18 +210,29 @@ export function drawCard(x, y, card, isEnemy, index, gameState) {
     ctx.fillText(card.name[0], x + CARD.WIDTH / 2, y + 60);
     ctx.restore();
 
-    // Dead overlay
+    // Dead overlay and grayscale effect simulation
     if (isDead) {
+        // Grayscale overlay
         ctx.save();
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+        ctx.globalCompositeOperation = 'saturation';
+        ctx.fillStyle = 'rgba(0, 0, 0, 1)';
+        ctx.fillRect(x, y, CARD.WIDTH, CARD.HEIGHT);
+        ctx.restore();
+
+        // Dark overlay
+        ctx.save();
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
         ctx.beginPath();
         ctx.roundRect(x, y, CARD.WIDTH, CARD.HEIGHT, 8);
         ctx.fill();
 
+        // Skull icon
         ctx.fillStyle = '#ff4757';
-        ctx.font = 'bold 16px "Segoe UI", sans-serif';
+        ctx.font = 'bold 30px "Segoe UI", sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
+        ctx.shadowColor = '#000';
+        ctx.shadowBlur = 10;
         ctx.fillText('💀', x + CARD.WIDTH / 2, y + CARD.HEIGHT / 2);
         ctx.restore();
     }

@@ -3,6 +3,8 @@
 import { CARD } from '../data/cards.js';
 import { getCtx, getCanvas, layout } from './canvas.js';
 
+import { isLanePlayable } from '../game/rules.js';
+
 /**
  * Draw the note distribution overlay during DISTRIBUTION phase
  */
@@ -16,9 +18,13 @@ export function drawNoteDistributionOverlay(gameState) {
     const positions = layout.cardPositions;
 
     const selectedCard = gameState.playerCards[gameState.selectedCard];
-    const aliveLanes = gameState.enemyCards.filter(c => c.pv > 0).length;
-    const maxNotes = Math.min(selectedCard.na, aliveLanes, gameState.playerStamina);
-    const cardMaxNotes = Math.min(selectedCard.na, aliveLanes);
+
+    // Alive lanes calc might strictly be just enemy > 0 for potential limits, 
+    // but the rule says we can only distribute to "playable" lanes.
+    const playableLanesCount = [0, 1, 2, 3].filter(i => isLanePlayable(gameState, i)).length;
+
+    const maxNotes = Math.min(selectedCard.na, playableLanesCount, gameState.playerStamina);
+    const cardMaxNotes = Math.min(selectedCard.na, playableLanesCount);
 
     // Semi-transparent overlay
     ctx.save();
@@ -43,8 +49,9 @@ export function drawNoteDistributionOverlay(gameState) {
         const laneX = lanesStartX + (i * (laneWidth + laneSpacing));
         const isHovered = gameState.hoveredLane === i;
         const hasNote = gameState.assignedNotes.includes(i);
-        const enemyCard = gameState.enemyCards[i];
-        const isDisabled = enemyCard.pv <= 0;
+
+        // Use helper
+        const isDisabled = !isLanePlayable(gameState, i);
 
         // Store lane position
         layout.lanePositions.push({ x: laneX, y: laneTopY, width: laneWidth, height: laneHeight, disabled: isDisabled });
@@ -52,7 +59,7 @@ export function drawNoteDistributionOverlay(gameState) {
         // Lane background
         ctx.save();
         if (isDisabled) {
-            ctx.fillStyle = 'rgba(50, 50, 50, 0.6)';
+            ctx.fillStyle = 'rgba(50, 50, 50, 0.3)'; // Opacity 0.3
         } else {
             ctx.fillStyle = hasNote ? 'rgba(155, 89, 182, 0.3)' : 'rgba(255, 255, 255, 0.1)';
             if (isHovered && gameState.assignedNotes.length < maxNotes || (isHovered && hasNote)) {
@@ -67,7 +74,7 @@ export function drawNoteDistributionOverlay(gameState) {
         // Lane border
         ctx.save();
         if (isDisabled) {
-            ctx.strokeStyle = 'rgba(100, 100, 100, 0.5)';
+            ctx.strokeStyle = 'rgba(100, 100, 100, 0.3)';
             ctx.lineWidth = 2;
         } else {
             ctx.strokeStyle = hasNote ? '#9b59b6' : 'rgba(255, 255, 255, 0.3)';
@@ -82,21 +89,28 @@ export function drawNoteDistributionOverlay(gameState) {
 
         // Lane number
         ctx.save();
-        ctx.fillStyle = isDisabled ? 'rgba(100, 100, 100, 0.5)' : 'rgba(255, 255, 255, 0.6)';
+        ctx.fillStyle = isDisabled ? 'rgba(100, 100, 100, 0.3)' : 'rgba(255, 255, 255, 0.6)';
         ctx.font = 'bold 14px "Segoe UI", sans-serif';
         ctx.textAlign = 'center';
         ctx.fillText(`Lane ${i + 1}`, laneX + laneWidth / 2, laneTopY - 10);
         ctx.restore();
 
-        // Skull for disabled lanes
+        // X for disabled lanes
         if (isDisabled) {
             ctx.save();
-            ctx.globalAlpha = 0.6;
-            ctx.fillStyle = '#666666';
-            ctx.font = 'bold 50px "Segoe UI", sans-serif';
+            ctx.globalAlpha = 0.8;
+            ctx.fillStyle = '#ff4757'; // Red X
+            ctx.font = 'bold 60px "Segoe UI", sans-serif';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
-            ctx.fillText('💀', laneX + laneWidth / 2, laneTopY + laneHeight / 2);
+            ctx.fillText('X', laneX + laneWidth / 2, laneTopY + laneHeight / 2);
+
+            // Tooltip on hover
+            if (isHovered) {
+                ctx.font = 'bold 14px "Segoe UI", sans-serif';
+                ctx.fillStyle = '#ff4757';
+                ctx.fillText('Lane Blocked', laneX + laneWidth / 2, laneTopY + laneHeight / 2 + 40);
+            }
             ctx.restore();
         } else {
             // Draw note icons
