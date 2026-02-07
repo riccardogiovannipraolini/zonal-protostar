@@ -1,15 +1,17 @@
 // ===== GAME STATE MANAGEMENT =====
 
 import { PLAYER_CARDS, ENEMY_CARDS, STAMINA } from '../data/cards.js';
+import { calculateChordBonuses } from './chords.js';
 
 /**
  * Create a fresh game state
  */
 export function createGameState() {
-    return {
+    const initialState = {
         // Phase management
-        phase: 'SELECTION', // SELECTION, DISTRIBUTION, RALLY, END_TURN, GAME_OVER
+        phase: 'SELECTION', // SELECTION, DISTRIBUTION, RALLY, END_TURN, GAME_OVER, REPOSITION
         currentTurn: 'player',
+        repositionSwapUsed: false,
 
         // Selection state
         selectedCard: null,
@@ -67,6 +69,12 @@ export function createGameState() {
         // Battle timer
         battleStartTime: Date.now()
     };
+
+    // Apply musical chord bonuses
+    calculateChordBonuses(initialState.playerCards);
+    calculateChordBonuses(initialState.enemyCards);
+
+    return initialState;
 }
 
 /**
@@ -77,9 +85,14 @@ export function resetGameState(state) {
     state.playerCards = PLAYER_CARDS.map(c => ({ ...c }));
     state.enemyCards = ENEMY_CARDS.map(c => ({ ...c }));
 
+    // Apply chord bonuses
+    calculateChordBonuses(state.playerCards);
+    calculateChordBonuses(state.enemyCards);
+
     // Reset core state
     state.phase = 'SELECTION';
     state.currentTurn = 'player';
+    state.repositionSwapUsed = false;
     state.selectedCard = null;
     state.targetCard = null;
     state.assignedNotes = [];

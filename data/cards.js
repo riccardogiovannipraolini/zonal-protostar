@@ -1,18 +1,29 @@
 // ===== CARD DATA & GAME CONFIGURATION =====
 
+// Musical Categories
+export const MUSICAL_CATEGORIES = {
+    DO: { id: 'DO', icon: 'C', name: 'DO' },
+    RE: { id: 'RE', icon: 'D', name: 'RE' },
+    MI: { id: 'MI', icon: 'E', name: 'MI' },
+    FA: { id: 'FA', icon: 'F', name: 'FA' },
+    SOL: { id: 'SOL', icon: 'G', name: 'SOL' },
+    LA: { id: 'LA', icon: 'A', name: 'LA' },
+    SI: { id: 'SI', icon: 'B', name: 'SI' }
+};
+
 // Card definitions
 export const PLAYER_CARDS = [
-    { name: 'Virgil', pv: 3, maxPv: 3, na: 4, speed: 3 },
-    { name: 'Salvataggio', pv: 5, maxPv: 5, na: 1, speed: 2 },
-    { name: 'Origami', pv: 2, maxPv: 2, na: 3, speed: 4 },
-    { name: 'Rovi', pv: 2, maxPv: 2, na: 5, speed: 5 }
+    { name: 'Virgil', pv: 3, maxPv: 3, na: 4, speed: 3, category: 'DO', requiredCategory: 'SOL' },
+    { name: 'Salvataggio', pv: 5, maxPv: 5, na: 1, speed: 2, category: 'SOL', requiredCategory: 'FA' },
+    { name: 'Origami', pv: 2, maxPv: 2, na: 3, speed: 4, category: 'SI', requiredCategory: 'LA' },
+    { name: 'Rovi', pv: 2, maxPv: 2, na: 5, speed: 5, category: 'RE', requiredCategory: 'SI' }
 ];
 
 export const ENEMY_CARDS = [
-    { name: 'Virgil', pv: 3, maxPv: 3, na: 4, speed: 3 },
-    { name: 'Salvataggio', pv: 5, maxPv: 5, na: 1, speed: 2 },
-    { name: 'Origami', pv: 2, maxPv: 2, na: 3, speed: 4 },
-    { name: 'Rovi', pv: 2, maxPv: 2, na: 5, speed: 5 }
+    { name: 'Virgil', pv: 3, maxPv: 3, na: 4, speed: 3, category: 'DO', requiredCategory: 'SOL' },
+    { name: 'Salvataggio', pv: 5, maxPv: 5, na: 1, speed: 2, category: 'SOL', requiredCategory: 'FA' },
+    { name: 'Origami', pv: 2, maxPv: 2, na: 3, speed: 4, category: 'SI', requiredCategory: 'LA' },
+    { name: 'Rovi', pv: 2, maxPv: 2, na: 5, speed: 5, category: 'RE', requiredCategory: 'SI' }
 ];
 
 // AI Configuration
@@ -43,8 +54,8 @@ export const RALLY = {
 
 // Stamina settings
 export const STAMINA = {
-    MAX: 5,
-    REGEN_PER_TURN: 2
+    MAX: 10,
+    REGEN_PER_TURN: 3
 };
 
 // Visual configuration

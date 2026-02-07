@@ -23,8 +23,9 @@ export function drawNoteDistributionOverlay(gameState) {
     // but the rule says we can only distribute to "playable" lanes.
     const playableLanesCount = [0, 1, 2, 3].filter(i => isLanePlayable(gameState, i)).length;
 
-    const maxNotes = Math.min(selectedCard.na, playableLanesCount, gameState.playerStamina);
-    const cardMaxNotes = Math.min(selectedCard.na, playableLanesCount);
+    // Allow stacking notes
+    const maxNotes = Math.min(selectedCard.na, gameState.playerStamina);
+    const cardMaxNotes = selectedCard.na;
 
     // Semi-transparent overlay
     ctx.save();

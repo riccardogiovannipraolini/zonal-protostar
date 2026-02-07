@@ -58,6 +58,12 @@ function handleClick(event) {
         return;
     }
 
+    // REPOSITION phase
+    if (gameState.phase === 'REPOSITION' && gameState.currentTurn === 'player') {
+        handleRepositionClick(x, y);
+        return;
+    }
+
     // SELECTION phase - select player card
     if (gameState.phase === 'SELECTION' && gameState.currentTurn === 'player') {
         for (let i = 0; i < layout.cardPositions.player.length; i++) {
@@ -65,7 +71,7 @@ function handleClick(event) {
             if (x >= pos.x && x <= pos.x + pos.width &&
                 y >= pos.y && y <= pos.y + pos.height) {
                 const card = gameState.playerCards[i];
-                if (card.pv <= 0) return;
+                if (card.pv <= 0) return; // Prevent selecting dead cards for Attack
 
                 if (gameState.selectedCard === i) {
                     gameState.selectedCard = null;
@@ -91,7 +97,8 @@ function handleClick(event) {
 function handleDistributionClick(x, y) {
     const selectedCard = gameState.playerCards[gameState.selectedCard];
     const aliveLanes = gameState.enemyCards.filter(c => c.pv > 0).length;
-    const maxNotes = Math.min(selectedCard.na, aliveLanes, gameState.playerStamina);
+    // Allow stacking notes on same lane, so max notes is limited by NA and Stamina, not alive lanes count
+    const maxNotes = Math.min(selectedCard.na, gameState.playerStamina);
 
     const positions = layout.cardPositions;
     const laneTopY = positions.enemy[0].y + CARD.HEIGHT + 30;
@@ -291,4 +298,78 @@ function getMousePosition(event) {
         x: (event.clientX - rect.left) * scaleX,
         y: (event.clientY - rect.top) * scaleY
     };
+}
+
+/**
+ * Handle clicks during Reposition Phase
+ */
+function handleRepositionClick(x, y) {
+    const canvas = getCanvas();
+    const positions = layout.cardPositions;
+
+    // Check "Skip Reposition" button
+    const buttonWidth = 160;
+    const buttonHeight = 40;
+    const skipX = (canvas.width - buttonWidth) / 2;
+    const skipY = canvas.height / 2; // Center screen? Or below cards? Let's put slightly above player cards.
+    // Actually, let's put it clearly in the middle
+
+    if (x >= skipX && x <= skipX + buttonWidth &&
+        y >= skipY && y <= skipY + buttonHeight) {
+
+        // Skip
+        gameState.phase = 'SELECTION';
+        gameState.selectedCard = null; // Clear any selection
+        renderFn();
+        return;
+    }
+
+    // Check Player Cards
+    for (let i = 0; i < positions.player.length; i++) {
+        const pos = positions.player[i];
+        if (x >= pos.x && x <= pos.x + pos.width &&
+            y >= pos.y && y <= pos.y + pos.height) {
+
+            // If already swapped, can't click cards (should have auto-advanced, but safety check)
+            if (gameState.repositionSwapUsed) return;
+
+            if (gameState.selectedCard === i) {
+                // Deselect
+                gameState.selectedCard = null;
+            } else if (gameState.selectedCard === null) {
+                // Select first card
+                gameState.selectedCard = i;
+            } else {
+                // Select second card -> SWAP
+                const firstIndex = gameState.selectedCard;
+                const secondIndex = i;
+
+                swapCards(firstIndex, secondIndex);
+
+                gameState.selectedCard = null;
+                gameState.repositionSwapUsed = true;
+
+                // Auto-advance to Selection phase after swap
+                setTimeout(() => {
+                    gameState.phase = 'SELECTION';
+                    renderFn();
+                }, 300); // Short delay to see the swap
+            }
+            renderFn();
+            return;
+        }
+    }
+}
+
+/**
+ * Swap two player cards
+ */
+function swapCards(index1, index2) {
+    if (index1 === index2) return;
+
+    const temp = gameState.playerCards[index1];
+    gameState.playerCards[index1] = gameState.playerCards[index2];
+    gameState.playerCards[index2] = temp;
+
+    console.log(`[Reposition] Swapped cards at index ${index1} and ${index2}`);
 }

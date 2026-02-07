@@ -10,7 +10,7 @@ import { createGameState, resetGameState } from './game/state.js';
 // Render imports
 import { initCanvas, clearCanvas, updateCardPositions, getCanvas } from './render/canvas.js';
 import { drawBattlefield, drawAllCards } from './render/cards.js';
-import { drawPhaseIndicator, drawStaminaBars, drawRegenAnimation, drawFloatingTexts, drawMessage, drawGameOverScreen, drawBattleTimer } from './render/ui.js';
+import { drawPhaseIndicator, drawStaminaBars, drawRegenAnimation, drawFloatingTexts, drawMessage, drawGameOverScreen, drawBattleTimer, drawRepositionUI } from './render/ui.js';
 import { drawNoteDistributionOverlay } from './render/distribution.js';
 import { drawRallyPhase } from './render/rally.js';
 
@@ -41,6 +41,7 @@ document.addEventListener('DOMContentLoaded', () => {
         drawRegenAnimation(gameState);
         drawRallyPhase(gameState);
         drawNoteDistributionOverlay(gameState);
+        drawRepositionUI(gameState);
         drawFloatingTexts(gameState);
         drawMessage(gameState);
         drawGameOverScreen(gameState);
@@ -94,7 +95,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (newStamina === 0) {
             // Auto-skip turn due to exhaustion
-            gameState.phase = 'SELECTION';
+            gameState.phase = 'SELECTION'; // Skip reposition if exhausted? Or allow it? Let's skip to keep it simple.
             render();
 
             showExhaustedMessage(isPlayer);
@@ -104,12 +105,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 endTurn(side);
             }, 1200);
         } else {
-            // Normal turn start
-            gameState.phase = 'SELECTION';
+            // Normal turn start -> REPOSITION Phase
+            gameState.repositionSwapUsed = false;
+            gameState.phase = 'REPOSITION';
             render();
 
             if (!isPlayer) {
-                setTimeout(() => aiTurn(), 500);
+                // AI Turn: Reposition -> Selection
+                setTimeout(() => {
+                    // TODO: call AI Reposition logic here
+                    import('./game/ai.js').then(module => {
+                        module.aiRepositionPhase(); // We will implement this
+                    });
+                }, 500);
             }
         }
     }

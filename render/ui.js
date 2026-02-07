@@ -9,11 +9,11 @@ import { getCtx, getCanvas } from './canvas.js';
 export function drawPhaseIndicator(gameState) {
     const ctx = getCtx();
     const canvas = getCanvas();
-    const phases = ['SELECTION', 'DISTRIBUTION', 'RALLY', 'END_TURN'];
-    const indicatorWidth = 140;
+    const phases = ['REPOSITION', 'SELECTION', 'DISTRIBUTION', 'RALLY', 'END_TURN'];
+    const indicatorWidth = 110; // Slightly smaller to fit 5
     const indicatorHeight = 24;
-    const spacing = 10;
-    const totalIndicatorWidth = (indicatorWidth * 4) + (spacing * 3);
+    const spacing = 8;
+    const totalIndicatorWidth = (indicatorWidth * phases.length) + (spacing * (phases.length - 1));
     const startIndicatorX = (canvas.width - totalIndicatorWidth) / 2;
     const indicatorY = 3;
 
@@ -291,6 +291,51 @@ export function drawGameOverScreen(gameState) {
     ctx.font = 'bold 20px "Segoe UI", sans-serif';
     ctx.shadowBlur = 0;
     ctx.fillText(isVictory ? 'Play Again' : 'Try Again', canvas.width / 2, buttonY + buttonHeight / 2);
+
+    ctx.restore();
+}
+
+/**
+ * Draw UI specific to Reposition Phase
+ */
+export function drawRepositionUI(gameState) {
+    if (gameState.phase !== 'REPOSITION') return;
+
+    const ctx = getCtx();
+    const canvas = getCanvas();
+
+    // Draw "Skip/Done" button
+    const buttonWidth = 160;
+    const buttonHeight = 40;
+    const buttonX = (canvas.width - buttonWidth) / 2;
+    const buttonY = canvas.height / 2;
+
+    ctx.save();
+
+    // Button bg
+    ctx.fillStyle = '#34495e';
+    ctx.beginPath();
+    ctx.roundRect(buttonX, buttonY, buttonWidth, buttonHeight, 8);
+    ctx.fill();
+
+    // Border
+    ctx.strokeStyle = '#ecf0f1';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.roundRect(buttonX, buttonY, buttonWidth, buttonHeight, 8);
+    ctx.stroke();
+
+    // Text
+    ctx.fillStyle = '#ecf0f1';
+    ctx.font = 'bold 16px "Segoe UI", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText("Skip Reposition", buttonX + buttonWidth / 2, buttonY + buttonHeight / 2);
+
+    // Instruction text
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '16px "Segoe UI", sans-serif';
+    ctx.fillText("Swap any 2 cards (once per turn)", canvas.width / 2, buttonY - 30);
 
     ctx.restore();
 }

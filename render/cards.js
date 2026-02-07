@@ -1,6 +1,6 @@
 // ===== CARD RENDERING =====
 
-import { CARD, COLORS } from '../data/cards.js';
+import { CARD, COLORS, MUSICAL_CATEGORIES } from '../data/cards.js';
 import { getCtx, getCanvas, drawHeart, drawEmptyHeart, layout } from './canvas.js';
 
 /**
@@ -258,6 +258,47 @@ export function drawCard(x, y, card, isEnemy, index, gameState) {
             drawEmptyHeart(heartsStartX + (i * heartSpacing) + heartSize / 2, y + CARD.HEIGHT - 25, heartSize);
         }
     }
+
+    // Musical Category Icon
+    if (card.category) {
+        const cat = MUSICAL_CATEGORIES[card.category];
+        if (cat) {
+            ctx.save();
+
+            // Background circle for icon
+            ctx.fillStyle = card.isChordActive ? '#ffd700' : 'rgba(0, 0, 0, 0.5)';
+            ctx.beginPath();
+            ctx.arc(x + 15, y + 15, 10, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Icon Text
+            ctx.fillStyle = card.isChordActive ? '#000000' : '#ffffff';
+            ctx.font = 'bold 10px "Segoe UI", sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(cat.icon, x + 15, y + 15);
+
+            // Active Chord Glow/Indicator
+            if (card.isChordActive) {
+                // Glow effect on border already handled by checking isChordActive? 
+                // Let's add specific text or icon for synergy
+                ctx.fillStyle = '#ffd700';
+                ctx.font = '10px "Segoe UI", sans-serif';
+                ctx.fillText('♪', x + CARD.WIDTH - 15, y + 15);
+            }
+
+            ctx.restore();
+        }
+    }
+
+    // NA Stat Display (Boosted?)
+    ctx.save();
+    const naColor = (card.baseNa !== undefined && card.na > card.baseNa) ? '#2ecc71' : '#3498db';
+    ctx.fillStyle = naColor;
+    ctx.font = 'bold 11px "Segoe UI", sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText(`${card.na} 🎵`, x + CARD.WIDTH - 8, y + CARD.HEIGHT - 8);
+    ctx.restore();
 }
 
 /**

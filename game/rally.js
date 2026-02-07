@@ -203,9 +203,30 @@ function animateNotes() {
 /**
  * Schedule AI parry for a specific note
  */
+/**
+ * Schedule AI parry for a specific note
+ */
 function scheduleAIParryForNote(note, remainingTime) {
     const parryWindow = note.timingIndicator.parryWindow;
     const perfectStart = 1 - (parryWindow / remainingTime);
+
+    // AI Reaction logic
+    // We want AI to sometimes hit Perfect, sometimes Imperfect, sometimes Miss.
+
+    // Determine outcome based on success rates
+    // Base success rate = chance to NOT MISS
+    const baseRate = AI_CONFIG.parrySuccessRate;
+    const bouncePenalty = (note.bounceCount || 0) * (AI_CONFIG.parryPenaltyPerBounce || 0.1);
+    const successChance = Math.max(0.1, baseRate - bouncePenalty);
+
+    // Roll for success (Not a miss)
+    const willParry = Math.random() < successChance;
+
+    // If successful, determine if Perfect or Good (Imperfect)
+    // Let's say 40% chance of Perfect if it parries? Or make it speed dependent?
+    // For now, simple 50/50 split on success to keep it dynamic
+    const perfectChance = 0.5;
+    const isPerfect = willParry && Math.random() < perfectChance;
 
     const aiDelay = AI_CONFIG.parryDelayMinMs +
         Math.random() * (AI_CONFIG.parryDelayMaxMs - AI_CONFIG.parryDelayMinMs);
@@ -214,14 +235,7 @@ function scheduleAIParryForNote(note, remainingTime) {
     setTimeout(() => {
         if (!note || note.resolved || note.parryAttempted) return;
 
-        // Calculate parry success with bounce penalty
-        const bounceCount = note.bounceCount || 0;
-        const baseRate = AI_CONFIG.parrySuccessRate;
-        const penalty = bounceCount * (AI_CONFIG.parryPenaltyPerBounce || 0.1);
-        const adjustedRate = Math.max(0.1, baseRate - penalty);
-
-        const parrySuccess = Math.random() < adjustedRate;
-        console.log('[Rally] AI parry attempt on note', note.id, '- success:', parrySuccess);
+        console.log(`[Rally] AI attempt on note ${note.id} - WillParry: ${willParry}, IsPerfect: ${isPerfect}`);
 
         // Visual flash
         gameState.aiParryFlash = {
@@ -231,24 +245,24 @@ function scheduleAIParryForNote(note, remainingTime) {
 
         note.parryAttempted = true;
 
-        if (parrySuccess) {
-            const currentBounceCount = (note.bounceCount || 0) + 1;
+        if (willParry) {
+            // Apply stamina effects to Enemy
+            if (isPerfect) {
+                // Perfect: +0.5 Stamina
+                gameState.enemyStamina = Math.min(gameState.enemyStamina + 0.5, gameState.enemyMaxStamina);
+                showStaminaChange(0.5, 'enemy');
 
-            if (currentBounceCount >= RALLY.MAX_BOUNCES) {
-                // STALEMATE
-                gameState.rallyResults.push({ lane: note.lane, result: 'STALEMATE' });
-                showImpactFeedback('STALEMATE', note);
-                note.resolved = true;
-                gameState.rallyState.completedNotes++;
-            } else {
-                // PARRY - bounce note back
                 gameState.rallyResults.push({ lane: note.lane, result: 'PARRY' });
-                showImpactFeedback('PARRY', note);
+                showImpactFeedback('PERFECT', note);
+                handleParrySuccess(note, true);
+            } else {
+                // Imperfect: -0.5 Stamina
+                gameState.enemyStamina -= 0.5;
+                showStaminaChange(-0.5, 'enemy');
 
-                triggerSpinAnimation(note, () => {
-                    if (!gameState.rallyState) return;
-                    bounceNote(note);
-                });
+                gameState.rallyResults.push({ lane: note.lane, result: 'PARRY' });
+                showImpactFeedback('GOOD', note); // Yellow
+                handleParrySuccess(note, false);
             }
         } else {
             // Failed parry = HIT
@@ -322,36 +336,48 @@ export function attemptParry(targetLane = null) {
 
     const elapsed = Date.now() - note.timingIndicator.startTime;
     const duration = note.timingIndicator.duration;
-    const timingProgress = elapsed / duration;
 
+    // Calculate timing from perfect center
     const perfectStart = 1 - (note.timingIndicator.parryWindow / duration);
     const perfectCenter = (perfectStart + 1) / 2;
     const msFromPerfect = Math.abs(elapsed - (perfectCenter * duration));
+
+    // Current total window size for this bounce
+    const scaledParryWindow = RALLY.PARRY_WINDOW * Math.pow(RALLY.WINDOW_MULTIPLIER_PER_BOUNCE, note.bounceCount);
+
+    // Conditions
     const isPerfect = msFromPerfect <= 50;
+    const isInWindow = msFromPerfect <= scaledParryWindow / 2;
 
-    if (timingProgress >= perfectStart && timingProgress <= 1) {
-        // PARRY SUCCESS
-        const currentBounceCount = (note.bounceCount || 0) + 1;
+    if (isPerfect) {
+        // === PERFECT PARRY ===
+        // Effect: Bounce back + Speed Up + Stamina Gain
 
-        if (currentBounceCount >= RALLY.MAX_BOUNCES) {
-            // STALEMATE
-            gameState.rallyResults.push({ lane: note.lane, result: 'STALEMATE' });
-            showImpactFeedback('STALEMATE', note);
-            note.resolved = true;
-            gameState.rallyState.completedNotes++;
-            return;
-        }
+        // Stamina gain (+0.5)
+        gameState.playerStamina = Math.min(gameState.playerStamina + 0.5, gameState.playerMaxStamina);
+        showStaminaChange(0.5, 'player');
 
-        // Normal parry - bounce note back
         gameState.rallyResults.push({ lane: note.lane, result: 'PARRY' });
-        showImpactFeedback(isPerfect ? 'PERFECT' : 'RETURN', note);
+        showImpactFeedback('PERFECT', note); // Green
 
-        triggerSpinAnimation(note, () => {
-            if (!gameState.rallyState) return;
-            bounceNote(note);
-        });
+        handleParrySuccess(note, true); // true = isPerfect
+    } else if (isInWindow) {
+        // === IMPERFECT PARRY ===
+        // Effect: Bounce back + Speed Reset + Stamina Cost
+
+        // Stamina cost (-0.5)
+        gameState.playerStamina -= 0.5;
+        // No min cap, can go negative as requested
+        showStaminaChange(-0.5, 'player');
+
+        gameState.rallyResults.push({ lane: note.lane, result: 'PARRY' });
+        showImpactFeedback('GOOD', note); // Yellow (Imperfect)
+
+        handleParrySuccess(note, false); // false = not perfect
     } else {
-        // PARRY FAILED
+        // === MISS (Timing off) ===
+        // Effect: Damage + Rally Ends
+
         const defenderSide = gameState.rallyState.currentDefender;
 
         gameState.rallyResults.push({
@@ -366,6 +392,27 @@ export function attemptParry(targetLane = null) {
             gameState.rallyState.completedNotes++;
         }, RALLY.IMPACT_DELAY);
     }
+}
+
+/**
+ * Handle successful parry (bounce logic wrapper)
+ */
+function handleParrySuccess(note, isPerfect) {
+    const currentBounceCount = (note.bounceCount || 0) + 1;
+
+    if (currentBounceCount >= RALLY.MAX_BOUNCES) {
+        // STALEMATE
+        gameState.rallyResults.push({ lane: note.lane, result: 'STALEMATE' });
+        showImpactFeedback('STALEMATE', note);
+        note.resolved = true;
+        gameState.rallyState.completedNotes++;
+        return;
+    }
+
+    triggerSpinAnimation(note, () => {
+        if (!gameState.rallyState) return;
+        bounceNote(note, isPerfect);
+    });
 }
 
 /**
@@ -399,18 +446,46 @@ function triggerSpinAnimation(note, callback) {
 /**
  * Bounce note back to other side (vertical only)
  */
-function bounceNote(note) {
+/**
+ * Bounce note back to other side (vertical only)
+ * @param {boolean} isPerfect - Whether previous parry was perfect (affects speed)
+ */
+function bounceNote(note, isPerfect = true) {
     if (!note || !gameState.rallyState) return;
 
     const newBounceCount = (note.bounceCount || 0) + 1;
 
     // Calculate velocity-scaled duration
-    const baseSpeed = RALLY.BASE_SPEED_MULTIPLIER || 1;
-    const bounceSpeedMultiplier = Math.pow(RALLY.SPEED_MULTIPLIER_PER_BOUNCE, newBounceCount);
-    const totalSpeedMultiplier = baseSpeed * bounceSpeedMultiplier;
+    // If Imperfect: Reset speed to base (remove accumulate multiplier)
+    // If Perfect: Stack multiplier normally
+
+    let totalSpeedMultiplier;
+
+    if (isPerfect) {
+        // Perfect: Continue stacking speed
+        const baseSpeed = RALLY.BASE_SPEED_MULTIPLIER || 1;
+        const bounceSpeedMultiplier = Math.pow(RALLY.SPEED_MULTIPLIER_PER_BOUNCE, newBounceCount);
+        totalSpeedMultiplier = baseSpeed * bounceSpeedMultiplier;
+    } else {
+        // Imperfect: Reset to base speed (punishment for poor timing is stamina loss + loss of momentum?)
+        // Wait, "Effect: Bounces back (rally continues)" - User said "note.speedMultiplier = 1.0; // RESET speed to base" in request.
+        // Assuming base speed multiplier from config.
+        totalSpeedMultiplier = RALLY.BASE_SPEED_MULTIPLIER || 1;
+
+        // IMPORTANT: We need to reset the logical bounce count FOR SPEED CALCULATION ONLY?
+        // Or act as if it's the first bounce? The user prompt said:
+        // "note.speedMultiplier = 1.0; // RESET speed to base"
+        // But we calculate speed dynamically based on bounceCount.
+        // To implement "Reset Speed", we effectively need to treat it as low speed.
+        // However, we MUST increment bounceCount for the window shrinking logic (which depends on bounceCount).
+        // PROPOSAL: We decouple visual speed from bounce count logic, OR we just set speed multiplier.
+        // Since we calculate duration from scratch here:
+    }
+
+    // Recalculate duration
     const scaledDuration = RALLY.NOTE_DURATION / totalSpeedMultiplier;
 
-    console.log('[Rally] Bounce #' + newBounceCount + ' - Speed: ' + totalSpeedMultiplier.toFixed(2) + 'x');
+    console.log(`[Rally] Bounce #${newBounceCount} (${isPerfect ? 'Perfect' : 'Imperfect'}) - Speed: ${totalSpeedMultiplier.toFixed(2)}x`);
 
     // Start tension audio at high bounces
     if (newBounceCount >= 2) {
@@ -456,7 +531,11 @@ function showImpactFeedback(result, note) {
     let text, color;
     if (result === 'PERFECT') {
         text = '✨ PERFECT! ✨';
-        color = '#ffd700';
+        color = '#2ecc71'; // Green
+        playParrySound(note.bounceCount || 0);
+    } else if (result === 'GOOD') {
+        text = '⚠ GOOD';
+        color = '#f1c40f'; // Yellow
         playParrySound(note.bounceCount || 0);
     } else if (result === 'RETURN') {
         text = '↩ RETURN!';
@@ -532,6 +611,45 @@ function showImpactFeedback(result, note) {
             }
         }, 50);
     }
+}
+
+/**
+ * Show floating text for stamina change
+ */
+function showStaminaChange(amount, side) {
+    const canvas = getCanvas();
+    const isPlayer = side === 'player';
+    const x = isPlayer ? 150 : 150; // Near stamina bars
+    const y = isPlayer ? canvas.height - 50 : 50;
+
+    const text = amount > 0 ? `+${amount}⚡` : `${amount}⚡`;
+    const color = amount > 0 ? '#ffd700' : '#ff4757';
+
+    const floatingText = {
+        text, x, y,
+        opacity: 1,
+        color,
+        startTime: Date.now()
+    };
+    gameState.floatingTexts.push(floatingText);
+
+    // Animate
+    const textDuration = 800;
+    const animateText = () => {
+        const elapsed = Date.now() - floatingText.startTime;
+        const progress = elapsed / textDuration;
+
+        if (progress < 1) {
+            floatingText.y = y - (progress * 20);
+            floatingText.opacity = 1 - progress;
+            renderFn();
+            requestAnimationFrame(animateText);
+        } else {
+            gameState.floatingTexts = gameState.floatingTexts.filter(t => t !== floatingText);
+            renderFn();
+        }
+    };
+    requestAnimationFrame(animateText);
 }
 
 /**
