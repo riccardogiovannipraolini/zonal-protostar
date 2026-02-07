@@ -1,6 +1,6 @@
 // ===== GAME STATE MANAGEMENT =====
 
-import { PLAYER_CARDS, ENEMY_CARDS, STAMINA } from '../data/cards.js';
+import { PLAYER_CARDS, ENEMY_CARDS, STAMINA, IDENTITY_CARDS } from '../data/cards.js';
 import { calculateChordBonuses } from './chords.js';
 
 /**
@@ -18,10 +18,12 @@ export function createGameState() {
         targetCard: null,
         assignedNotes: [],
         hoveredLane: null,
+        hoveredIdentityCard: null, // { side: 'player'|'enemy', index: number }
 
         // Animation flags
         animatingAttack: false,
         shakeCard: null, // { side, index, frames }
+        shakeInterval: null, // Interval ID for shake animation
         message: null,   // { text, frames }
 
         // Rally state machine
@@ -60,6 +62,18 @@ export function createGameState() {
         playerCards: PLAYER_CARDS.map(c => ({ ...c })),
         enemyCards: ENEMY_CARDS.map(c => ({ ...c })),
 
+        // Identity Cards (New)
+        // Format: [LeftCard, RightCard]
+        // Player: Left=[Metronomo], Right=[Scudo] (cloned)
+        playerIdentityCards: [
+            { ...IDENTITY_CARDS.METRONOMO, instanceId: 'p_id_0' },
+            { ...IDENTITY_CARDS.SCUDO, instanceId: 'p_id_1', currentCooldown: 0, active: false, currentCharges: 0 }
+        ],
+        enemyIdentityCards: [
+            { ...IDENTITY_CARDS.METRONOMO, instanceId: 'e_id_0' },
+            { ...IDENTITY_CARDS.SCUDO, instanceId: 'e_id_1', currentCooldown: 0, active: false, currentCharges: 0 }
+        ],
+
         // UI state
         floatingTexts: [],
         gameOver: null,
@@ -84,6 +98,14 @@ export function resetGameState(state) {
     // Reset cards
     state.playerCards = PLAYER_CARDS.map(c => ({ ...c }));
     state.enemyCards = ENEMY_CARDS.map(c => ({ ...c }));
+    state.playerIdentityCards = [
+        { ...IDENTITY_CARDS.METRONOMO, instanceId: 'p_id_0' },
+        { ...IDENTITY_CARDS.SCUDO, instanceId: 'p_id_1', currentCooldown: 0, active: false, currentCharges: 0 }
+    ];
+    state.enemyIdentityCards = [
+        { ...IDENTITY_CARDS.METRONOMO, instanceId: 'e_id_0' },
+        { ...IDENTITY_CARDS.SCUDO, instanceId: 'e_id_1', currentCooldown: 0, active: false, currentCharges: 0 }
+    ];
 
     // Apply chord bonuses
     calculateChordBonuses(state.playerCards);
@@ -97,7 +119,10 @@ export function resetGameState(state) {
     state.targetCard = null;
     state.assignedNotes = [];
     state.hoveredLane = null;
+    state.hoveredIdentityCard = null;
     state.animatingAttack = false;
+    if (state.shakeInterval) clearInterval(state.shakeInterval);
+    state.shakeInterval = null;
     state.shakeCard = null;
     state.message = null;
 

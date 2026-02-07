@@ -89,6 +89,65 @@ function handleClick(event) {
     if (gameState.phase === 'DISTRIBUTION' && gameState.currentTurn === 'player') {
         handleDistributionClick(x, y);
     }
+
+    // IDENTITY CARD Interaction
+    if (gameState.currentTurn === 'player' && (gameState.phase === 'SELECTION' || gameState.phase === 'DISTRIBUTION' || gameState.phase === 'REPOSITION')) {
+        handleIdentityCardClick(x, y);
+    }
+}
+
+/**
+ * Handle clicks on Identity Cards (Activation)
+ */
+function handleIdentityCardClick(x, y) {
+    const positions = layout.identityCardPositions.player;
+    if (!positions) return;
+
+    // Check both slots
+    positions.forEach((pos, index) => {
+        if (x >= pos.x && x <= pos.x + pos.width &&
+            y >= pos.y && y <= pos.y + pos.height) {
+
+            const card = gameState.playerIdentityCards[index];
+            if (!card) return;
+
+            // Activate Logic
+            if (card.type === 'ACTIVE' && card.currentCooldown === 0 && !card.active) {
+                if (gameState.playerStamina >= card.cost) {
+                    // Activate!
+                    gameState.playerStamina -= card.cost;
+                    card.active = true;
+                    card.currentCharges = card.charges;
+                    card.currentCooldown = card.cooldown; // Start cooldown (will prevent re-use)
+
+                    // Feedback
+                    const floatingText = {
+                        text: 'SHIELD ACTIVE!',
+                        x: pos.x + pos.width / 2,
+                        y: pos.y - 20,
+                        opacity: 1,
+                        color: '#2ecc71',
+                        startTime: Date.now()
+                    };
+                    gameState.floatingTexts.push(floatingText);
+
+                    renderFn();
+                } else {
+                    // Not enough stamina
+                    const floatingText = {
+                        text: 'Not enough Stamina!',
+                        x: pos.x + pos.width / 2,
+                        y: pos.y - 20,
+                        opacity: 1,
+                        color: '#e74c3c',
+                        startTime: Date.now()
+                    };
+                    gameState.floatingTexts.push(floatingText);
+                    renderFn();
+                }
+            }
+        }
+    });
 }
 
 /**
@@ -229,7 +288,9 @@ function handleMouseMove(event) {
 
     let isOverInteractable = false;
     const prevHoveredLane = gameState.hoveredLane;
+    const prevHoveredId = gameState.hoveredIdentityCard; // Track previous state
     gameState.hoveredLane = null;
+    gameState.hoveredIdentityCard = null;
 
     // Check lanes in DISTRIBUTION phase
     if (gameState.phase === 'DISTRIBUTION' && gameState.currentTurn === 'player') {
@@ -281,6 +342,35 @@ function handleMouseMove(event) {
             }
         }
     }
+
+    // Check Identity Cards
+    // Left Identity (Player)
+    if (layout.identityCardPositions.player && layout.identityCardPositions.player[0]) {
+        const pos = layout.identityCardPositions.player[0];
+        if (gameState.playerIdentityCards && gameState.playerIdentityCards[0]) {
+            if (x >= pos.x && x <= pos.x + pos.width &&
+                y >= pos.y && y <= pos.y + pos.height) {
+                gameState.hoveredIdentityCard = { side: 'player', index: 0 };
+                isOverInteractable = true;
+            }
+        }
+    }
+
+    // Right Identity (Enemy)
+    if (layout.identityCardPositions.enemy && layout.identityCardPositions.enemy[0]) {
+        const pos = layout.identityCardPositions.enemy[0];
+        if (gameState.enemyIdentityCards && gameState.enemyIdentityCards[0]) {
+            if (x >= pos.x && x <= pos.x + pos.width &&
+                y >= pos.y && y <= pos.y + pos.height) {
+                gameState.hoveredIdentityCard = { side: 'enemy', index: 0 };
+                isOverInteractable = true;
+            }
+        }
+    }
+
+    // Re-render if identity hover changed
+    if (gameState.hoveredIdentityCard) renderFn();
+    else if (!gameState.hoveredIdentityCard && typeof prevHoveredId !== 'undefined' && prevHoveredId) renderFn();
 
     canvas.style.cursor = isOverInteractable ? 'pointer' : 'default';
 }

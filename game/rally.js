@@ -156,10 +156,40 @@ function animateNotes() {
         const progress = Math.min(elapsed / note.duration, 1);
 
         note.progress = progress;
+        const previousY = note.y;
         note.x = note.startX; // X stays constant (vertical movement)
-        note.y = note.startY + (note.endY - note.startY) * progress;
+        const newY = note.startY + (note.endY - note.startY) * progress;
 
-        // Start timing indicator at 50% progress for player-defending notes
+        // CHECK IDENTITY CARD INTERSECTION
+        // Lane 0: 42% height
+        // Lane 1: 58% height
+        const laneYs = [
+            getCanvas().height * 0.42,
+            getCanvas().height * 0.58
+        ];
+
+        // Helper to check intersection
+        const checkCrossed = (y, prevY, newY, direction) => {
+            if (direction === 'toEnemy') {
+                return prevY >= y && newY <= y;
+            } else {
+                return prevY <= y && newY >= y;
+            }
+        };
+
+        // Check Lane 0
+        if (!note.lane0EffectApplied && checkCrossed(laneYs[0], previousY, newY, note.direction)) {
+            applyIdentityEffect(note, laneYs[0], 0);
+            note.lane0EffectApplied = true;
+        }
+
+        // Check Lane 1
+        if (!note.lane1EffectApplied && checkCrossed(laneYs[1], previousY, newY, note.direction)) {
+            applyIdentityEffect(note, laneYs[1], 1);
+            note.lane1EffectApplied = true;
+        }
+
+        note.y = newY;
         if (progress >= 0.5 && !note.timingIndicator) {
             const remainingTime = note.duration * 0.5;
             const scaledParryWindow = RALLY.PARRY_WINDOW * Math.pow(RALLY.WINDOW_MULTIPLIER_PER_BOUNCE, note.bounceCount);
@@ -588,6 +618,12 @@ function showImpactFeedback(result, note) {
 
     // Shake on HIT
     if (result === 'HIT') {
+        // Clear any existing shake
+        if (gameState.shakeInterval) {
+            clearInterval(gameState.shakeInterval);
+            gameState.shakeInterval = null;
+        }
+
         const defenderSide = gameState.rallyState.currentDefender;
         const bounceCount = note.bounceCount || 0;
         const maxShakeFrames = 10 + (bounceCount * 2);
@@ -600,14 +636,27 @@ function showImpactFeedback(result, note) {
         };
 
         let shakeFrames = 0;
-        const shakeInterval = setInterval(() => {
+        gameState.shakeInterval = setInterval(() => {
             shakeFrames++;
-            gameState.shakeCard.frames = shakeFrames;
-            renderFn();
+
+            // Safety check
+            if (gameState.shakeCard) {
+                gameState.shakeCard.frames = shakeFrames;
+                renderFn();
+            } else {
+                // If shakeCard is null (e.g. game reset), stop
+                clearInterval(gameState.shakeInterval);
+                gameState.shakeInterval = null;
+                return;
+            }
 
             if (shakeFrames >= maxShakeFrames) {
-                clearInterval(shakeInterval);
+                if (gameState.shakeInterval) {
+                    clearInterval(gameState.shakeInterval);
+                    gameState.shakeInterval = null;
+                }
                 gameState.shakeCard = null;
+                renderFn(); // Ensure one last render to clear shake
             }
         }, 50);
     }

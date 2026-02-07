@@ -318,4 +318,201 @@ export function drawAllCards(gameState) {
         const pos = positions.player[i];
         drawCard(pos.x, pos.y, gameState.playerCards[i], false, i, gameState);
     }
+
+    // Identity Cards & Lanes
+    drawHorizontalLanes(gameState);
+    drawIdentityCards(gameState);
 }
+
+/**
+ * Draw Identity Cards at edges
+ */
+function drawIdentityCards(gameState) {
+    const positions = layout.identityCardPositions;
+
+    // Player Identity Cards
+    if (gameState.playerIdentityCards) {
+        gameState.playerIdentityCards.forEach((card, index) => {
+            if (card && positions.player[index]) {
+                drawSingleIdentityCard(positions.player[index], card, 'player');
+            }
+        });
+    }
+
+    // Enemy Identity Cards
+    if (gameState.enemyIdentityCards) {
+        gameState.enemyIdentityCards.forEach((card, index) => {
+            if (card && positions.enemy[index]) {
+                drawSingleIdentityCard(positions.enemy[index], card, 'enemy');
+            }
+        });
+    }
+}
+
+/**
+ * Draw a single identity card
+ */
+function drawSingleIdentityCard(pos, card, side) {
+    const ctx = getCtx();
+    const isPlayer = side === 'player';
+
+    // Card background
+    // Card Background
+    ctx.save();
+
+    // Check for Active State (Scudo)
+    if (card.active) {
+        ctx.fillStyle = isPlayer ? '#2c3e50' : '#8e44ad';
+        ctx.strokeStyle = '#2ecc71'; // Green Glow
+        ctx.lineWidth = 3;
+        ctx.shadowColor = '#2ecc71';
+        ctx.shadowBlur = 15;
+    } else if (card.type === 'ACTIVE' && card.currentCooldown === 0 && isPlayer) {
+        // Ready to activate
+        ctx.fillStyle = isPlayer ? '#2c3e50' : '#8e44ad';
+        ctx.strokeStyle = '#f1c40f'; // Gold
+        ctx.lineWidth = 2;
+        ctx.shadowBlur = 5;
+        ctx.shadowColor = '#f1c40f';
+    } else {
+        ctx.fillStyle = isPlayer ? '#2c3e50' : '#8e44ad';
+        ctx.strokeStyle = isPlayer ? '#3498db' : '#9b59b6';
+        ctx.lineWidth = 2;
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = 'rgba(0,0,0,0.5)';
+    }
+
+    ctx.beginPath();
+    ctx.roundRect(pos.x, pos.y, pos.width, pos.height, 6);
+    ctx.fill();
+    ctx.stroke();
+
+    // Scudo Active Header/Overlay
+    if (card.active) {
+        ctx.fillStyle = '#2ecc71';
+        ctx.font = 'bold 10px "Segoe UI", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText("ACTIVE!", pos.x + pos.width / 2, pos.y - 10);
+
+        // Show Charges
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 12px "Segoe UI", sans-serif';
+        ctx.fillText(`⚡ ${card.currentCharges}`, pos.x + pos.width / 2, pos.y + pos.height / 2 + 20);
+    }
+    else if (card.currentCooldown > 0) {
+        // Cooldown Overlay
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+        ctx.beginPath();
+        ctx.roundRect(pos.x, pos.y, pos.width, pos.height, 6);
+        ctx.fill();
+
+        ctx.fillStyle = '#bdc3c7';
+        ctx.font = 'bold 24px "Segoe UI", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(card.currentCooldown, pos.x + pos.width / 2, pos.y + pos.height / 2);
+
+        ctx.font = '10px "Segoe UI", sans-serif';
+        ctx.fillText("COOLDOWN", pos.x + pos.width / 2, pos.y + pos.height / 2 + 20);
+    } else if (card.type === 'ACTIVE' && isPlayer) {
+        // "Click to Activate" hint
+        ctx.fillStyle = '#f1c40f';
+        ctx.font = 'italic 9px "Segoe UI", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText("CLICK ACTIVATE", pos.x + pos.width / 2, pos.y + pos.height + 12);
+        ctx.fillText(`(2 Stamina)`, pos.x + pos.width / 2, pos.y + pos.height + 22);
+    }
+
+    // Name
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 10px "Segoe UI", sans-serif';
+    ctx.textAlign = 'center';
+
+    // Split name if too long
+    const words = card.name.split(' ');
+    ctx.fillText(words[0], pos.x + pos.width / 2, pos.y + 20);
+    if (words[1]) ctx.fillText(words[1], pos.x + pos.width / 2, pos.y + 32);
+
+    // Hearts (HP)
+    const heartSize = 8;
+    const padding = 2;
+    const totalW = (card.maxHp * heartSize) + ((card.maxHp - 1) * padding);
+    let startX = pos.x + (pos.width - totalW) / 2;
+
+    for (let i = 0; i < card.maxHp; i++) {
+        if (i < card.hp) {
+            drawHeart(startX + i * (heartSize + padding) + heartSize / 2, pos.y + pos.height - 15, heartSize);
+        } else {
+            drawEmptyHeart(startX + i * (heartSize + padding) + heartSize / 2, pos.y + pos.height - 15, heartSize);
+        }
+    }
+
+    ctx.restore();
+}
+
+/**
+ * Draw Horizontal Lanes projected by Identity Cards
+ */
+/**
+ * Draw Horizontal Lanes projected by Identity Cards
+ */
+export function drawHorizontalLanes(gameState) {
+    const positions = layout.identityCardPositions;
+    const ctx = getCtx();
+    const canvas = getCanvas();
+
+    // Draw Lane 0 (Top/Left)
+    if (positions.player[0]) {
+        drawLane(ctx, canvas, positions.player[0], gameState.playerIdentityCards?.[0], gameState.enemyIdentityCards?.[0]);
+    }
+
+    // Draw Lane 1 (Bottom/Right)
+    if (positions.player[1]) {
+        drawLane(ctx, canvas, positions.player[1], gameState.playerIdentityCards?.[1], gameState.enemyIdentityCards?.[1]);
+    }
+}
+
+function drawLane(ctx, canvas, pos, playerCard, enemyCard) {
+    if (!pos) return;
+
+    const y = pos.y + pos.height / 2;
+
+    const hasPlayer = playerCard && playerCard.hp > 0;
+    const hasEnemy = enemyCard && enemyCard.hp > 0;
+    const isActive = hasPlayer || hasEnemy;
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(canvas.width, y);
+
+    if (isActive) {
+        ctx.setLineDash([]);
+        ctx.lineWidth = 2;
+
+        let color = '#3498db'; // Default Blue (Metronomo)
+        let glow = false;
+
+        // Check for Scudo Active
+        if ((playerCard?.active) || (enemyCard?.active)) {
+            color = '#2ecc71'; // Green
+            glow = true;
+        }
+
+        ctx.strokeStyle = color;
+
+        if (glow) {
+            ctx.shadowColor = color;
+            ctx.shadowBlur = 10;
+        }
+    } else {
+        ctx.setLineDash([10, 10]);
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+    }
+
+    ctx.stroke();
+    ctx.restore();
+}
+
+

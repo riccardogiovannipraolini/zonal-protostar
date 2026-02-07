@@ -339,3 +339,74 @@ export function drawRepositionUI(gameState) {
 
     ctx.restore();
 }
+
+/**
+ * Draw tooltip for hovered items (Identity Cards)
+ */
+export function drawTooltip(gameState) {
+    if (!gameState.hoveredIdentityCard) return;
+
+    const { side, index } = gameState.hoveredIdentityCard;
+    const cards = side === 'player' ? gameState.playerIdentityCards : gameState.enemyIdentityCards;
+    const card = cards[index];
+
+    if (!card) return;
+
+    // Position tooltip near the card
+    // Player ID card is Left, Enemy is Right.
+    // Tooltip should be towards center to avoid going off screen.
+    const ctx = getCtx();
+    const canvas = getCanvas();
+
+    let x, y;
+    if (side === 'player') {
+        x = 100; // Right of player card
+        y = canvas.height / 2;
+    } else {
+        x = canvas.width - 260; // Left of enemy card
+        y = canvas.height / 2;
+    }
+
+    const width = 200;
+    const height = 80; // Approximate
+    const padding = 10;
+
+    ctx.save();
+
+    // Background
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.9)';
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 1;
+    ctx.shadowColor = 'rgba(0,0,0,0.5)';
+    ctx.shadowBlur = 10;
+
+    ctx.beginPath();
+    ctx.roundRect(x, y - height / 2, width, height, 4);
+    ctx.fill();
+    ctx.stroke();
+
+    // Title
+    ctx.fillStyle = '#ffcc00';
+    ctx.font = 'bold 12px "Segoe UI", sans-serif';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillText(card.name, x + padding, y - height / 2 + padding);
+
+    // Type
+    ctx.fillStyle = '#aaaaaa';
+    ctx.font = 'italic 10px "Segoe UI", sans-serif';
+    ctx.fillText(`${card.type}`, x + padding, y - height / 2 + padding + 15);
+
+    // Description
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '11px "Segoe UI", sans-serif';
+    // Simple text wrapping if needed, but for now short description
+    ctx.fillText(card.description || 'No description', x + padding, y - height / 2 + padding + 30);
+
+    // HP
+    ctx.fillStyle = '#ff4757';
+    ctx.textAlign = 'right';
+    ctx.fillText(`${card.hp}/${card.maxHp} HP`, x + width - padding, y - height / 2 + padding);
+
+    ctx.restore();
+}

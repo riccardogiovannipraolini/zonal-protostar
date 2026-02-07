@@ -11,6 +11,35 @@ export const MUSICAL_CATEGORIES = {
     SI: { id: 'SI', icon: 'B', name: 'SI' }
 };
 
+// Identity Cards
+export const IDENTITY_CARDS = {
+    METRONOMO: {
+        id: 'METRONOMO',
+        name: 'Metronomo Spezzato',
+        type: 'PASSIVE',
+        description: 'Notes crossing this lane get -0.15 speed',
+        hp: 3,
+        maxHp: 3,
+        cost: 0,
+        cooldown: 0,
+        effect: 'SLOW',
+        value: 0.85
+    },
+    SCUDO: {
+        id: 'SCUDO',
+        name: 'Scudo Armonico',
+        type: 'ACTIVE',
+        description: 'Spend 2 Stamina: Next 3 notes crossing get -50% speed. CD: 3.',
+        hp: 3,
+        maxHp: 3,
+        cost: 2,
+        cooldown: 3,
+        effect: 'SHIELD',
+        value: 0.5,
+        charges: 3
+    }
+};
+
 // Card definitions
 export const PLAYER_CARDS = [
     { name: 'Virgil', pv: 3, maxPv: 3, na: 4, speed: 3, category: 'DO', requiredCategory: 'SOL' },

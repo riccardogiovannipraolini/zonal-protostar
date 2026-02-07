@@ -11,6 +11,7 @@ export const layout = {
     enemyY: 55,
     playerY: 0,
     cardPositions: { player: [], enemy: [] },
+    identityCardPositions: { player: [], enemy: [] },
     lanePositions: []
 };
 
@@ -104,4 +105,22 @@ export function updateCardPositions() {
         layout.cardPositions.player.push(getCardPosition('player', i));
         layout.cardPositions.enemy.push(getCardPosition('enemy', i));
     }
+
+    // Identity Card Positions (Left/Right edges)
+    // 2 cards per side
+    const leftY = canvas.height * 0.42; // Top Lane
+    const rightY = canvas.height * 0.58; // Bottom Lane
+    const width = 80;
+    const height = 100;
+
+    layout.identityCardPositions = {
+        player: [
+            { x: 20, y: leftY, width, height },   // Top (Left implied)
+            { x: 20, y: rightY, width, height }   // Bottom (Right implied)
+        ],
+        enemy: [
+            { x: canvas.width - width - 20, y: leftY, width, height }, // Top
+            { x: canvas.width - width - 20, y: rightY, width, height } // Bottom
+        ]
+    };
 }

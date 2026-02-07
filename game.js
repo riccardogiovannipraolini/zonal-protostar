@@ -10,7 +10,7 @@ import { createGameState, resetGameState } from './game/state.js';
 // Render imports
 import { initCanvas, clearCanvas, updateCardPositions, getCanvas } from './render/canvas.js';
 import { drawBattlefield, drawAllCards } from './render/cards.js';
-import { drawPhaseIndicator, drawStaminaBars, drawRegenAnimation, drawFloatingTexts, drawMessage, drawGameOverScreen, drawBattleTimer, drawRepositionUI } from './render/ui.js';
+import { drawPhaseIndicator, drawStaminaBars, drawRegenAnimation, drawFloatingTexts, drawMessage, drawGameOverScreen, drawBattleTimer, drawRepositionUI, drawTooltip } from './render/ui.js';
 import { drawNoteDistributionOverlay } from './render/distribution.js';
 import { drawRallyPhase } from './render/rally.js';
 
@@ -45,6 +45,7 @@ document.addEventListener('DOMContentLoaded', () => {
         drawFloatingTexts(gameState);
         drawMessage(gameState);
         drawGameOverScreen(gameState);
+        drawTooltip(gameState);
     }
 
     // End turn and switch players
@@ -78,8 +79,25 @@ document.addEventListener('DOMContentLoaded', () => {
         // Apply regen
         if (isPlayer) {
             gameState.playerStamina = Math.min(gameState.playerStamina + STAMINA.REGEN_PER_TURN, maxStamina);
+
+            // Decrement Identity Card Cooldowns
+            if (gameState.playerIdentityCards) {
+                gameState.playerIdentityCards.forEach(card => {
+                    if (card && card.currentCooldown > 0) {
+                        card.currentCooldown--;
+                    }
+                });
+            }
         } else {
             gameState.enemyStamina = Math.min(gameState.enemyStamina + STAMINA.REGEN_PER_TURN, maxStamina);
+            // Decrement Enemy Identity Card Cooldowns
+            if (gameState.enemyIdentityCards) {
+                gameState.enemyIdentityCards.forEach(card => {
+                    if (card && card.currentCooldown > 0) {
+                        card.currentCooldown--;
+                    }
+                });
+            }
         }
 
         // Show regen animation
