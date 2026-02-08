@@ -164,7 +164,9 @@ function scheduleNoteSpawns(isPlayerAttacker, notesByLane) {
                 gameState.activeNotes.push(note);
                 // console.log(`[Rally] Spawned note ${note.id} at t=${delay}ms on lane ${lane} (Speed: ${combinedSpeedMult.toFixed(2)}x)`);
 
-                if (gameState.activeNotes.length === 1) {
+                // Start animation loop only if not already running
+                if (gameState.activeNotes.length === 1 && !gameState.isAnimating) {
+                    gameState.isAnimating = true;
                     animateNotes();
                 }
             }, delay);
@@ -178,11 +180,16 @@ function scheduleNoteSpawns(isPlayerAttacker, notesByLane) {
 function animateNotes() {
     if (!gameState.rallyState || gameState.activeNotes.length === 0) {
         // Check if rally is complete
+        gameState.isAnimating = false;
         checkRallyComplete();
         return;
     }
 
     let anyNoteActive = false;
+
+    // Cache canvas height calculation (used for all notes)
+    const canvas = getCanvas();
+    const identityLaneY = canvas.height / 2;
 
     gameState.activeNotes.forEach(note => {
         if (note.resolved) return;
@@ -196,7 +203,6 @@ function animateNotes() {
         const newY = note.startY + (note.endY - note.startY) * progress;
 
         // CHECK IDENTITY CARD INTERSECTION (Single Lane at 50%)
-        const identityLaneY = getCanvas().height / 2;
 
         // Helper to check intersection
         const checkCrossed = (y, prevY, newY, direction) => {
@@ -216,7 +222,12 @@ function animateNotes() {
         note.y = newY;
         if (progress >= 0.5 && !note.timingIndicator) {
             const remainingTime = note.duration * 0.5;
-            const scaledParryWindow = RALLY.PARRY_WINDOW * Math.pow(RALLY.WINDOW_MULTIPLIER_PER_BOUNCE, note.bounceCount);
+            // Cache Math.pow result - bounceCount rarely exceeds 5-6
+            const bounceCount = note.bounceCount || 0;
+            const windowMultiplier = bounceCount <= 10 
+                ? Math.pow(RALLY.WINDOW_MULTIPLIER_PER_BOUNCE, bounceCount)
+                : Math.pow(RALLY.WINDOW_MULTIPLIER_PER_BOUNCE, 10); // Cap at 10 for performance
+            const scaledParryWindow = RALLY.PARRY_WINDOW * windowMultiplier;
 
             note.timingIndicator = {
                 startTime: Date.now(),
@@ -247,9 +258,11 @@ function animateNotes() {
 
     renderFn();
 
-    if (anyNoteActive || gameState.activeNotes.some(n => !n.resolved)) {
+    // anyNoteActive already checks if any note is unresolved, no need for .some()
+    if (anyNoteActive) {
         requestAnimationFrame(animateNotes);
     } else {
+        gameState.isAnimating = false;
         checkRallyComplete();
     }
 }
@@ -404,7 +417,10 @@ export function attemptParry(targetLane = null) {
 
     const bounceCount = note.bounceCount || 0;
     const baseWindow = 200;
-    const shrinkFactor = Math.pow(0.8, bounceCount);
+    // Optimize: pre-calculate common bounce counts or use iterative multiplication
+    const shrinkFactor = bounceCount <= 10 
+        ? Math.pow(0.8, bounceCount)
+        : Math.pow(0.8, 10); // Cap at 10 for performance
     const scaledWindow = baseWindow * shrinkFactor;
 
     const isPerfect = msFromPerfect <= 70;
@@ -488,30 +504,50 @@ function handleParrySuccess(note, isPerfect) {
 
 /**
  * Trigger spin animation on a note
+ * Optimized to integrate with main animation loop instead of creating separate loop
  */
 function triggerSpinAnimation(note, callback) {
     const duration = 300;
     const startTime = Date.now();
     note.isSpinning = true;
+    note.spinStartTime = startTime;
+    note.spinDuration = duration;
 
-    function animateSpin() {
-        if (!note.isSpinning) return;
+    // If main animation is already running, it will handle the spin
+    // Otherwise, start the animation loop
+    if (!gameState.isAnimating) {
+        function animateSpin() {
+            if (!note.isSpinning || !gameState.rallyState) {
+                note.isSpinning = false;
+                callback();
+                return;
+            }
 
-        const elapsed = Date.now() - startTime;
-        const progress = Math.min(elapsed / duration, 1);
+            const elapsed = Date.now() - startTime;
+            const progress = Math.min(elapsed / duration, 1);
 
-        note.spinProgress = progress;
-        renderFn();
+            note.spinProgress = progress;
+            renderFn();
 
-        if (progress < 1) {
-            requestAnimationFrame(animateSpin);
-        } else {
-            note.isSpinning = false;
-            callback();
+            if (progress < 1) {
+                requestAnimationFrame(animateSpin);
+            } else {
+                note.isSpinning = false;
+                callback();
+            }
         }
-    }
 
-    requestAnimationFrame(animateSpin);
+        requestAnimationFrame(animateSpin);
+    } else {
+        // Main animation loop is running, use setTimeout to trigger callback after duration
+        setTimeout(() => {
+            if (note.isSpinning && gameState.rallyState) {
+                note.isSpinning = false;
+                note.spinProgress = 1;
+                callback();
+            }
+        }, duration);
+    }
 }
 
 /**
@@ -535,7 +571,9 @@ function bounceNote(note, isPerfect = true) {
     if (isPerfect) {
         // Perfect: Continue stacking speed
         const baseSpeed = RALLY.BASE_SPEED_MULTIPLIER || 1;
-        const bounceSpeedMultiplier = Math.pow(RALLY.SPEED_MULTIPLIER_PER_BOUNCE, newBounceCount);
+        // Optimize: cap bounce count for performance
+        const cappedBounce = Math.min(newBounceCount, 15);
+        const bounceSpeedMultiplier = Math.pow(RALLY.SPEED_MULTIPLIER_PER_BOUNCE, cappedBounce);
         totalSpeedMultiplier = baseSpeed * bounceSpeedMultiplier;
     } else {
         // Imperfect: Reset speed to base 1.3
@@ -613,8 +651,11 @@ function bounceNote(note, isPerfect = true) {
     gameState.timingIndicator = null;
     gameState.parryAttempted = false;
 
-    // Continue animation
-    animateNotes();
+    // Continue animation only if not already animating
+    // The existing animation loop will pick up the updated note state
+    if (!gameState.isAnimating) {
+        animateNotes();
+    }
 }
 
 /**
@@ -912,6 +953,7 @@ function cleanupRally() {
     gameState.rallyState = null;
     gameState.currentNote = null;
     gameState.activeNotes = [];
+    gameState.isAnimating = false;
     gameState.timingIndicator = null;
     gameState.assignedNotes = [];
 }

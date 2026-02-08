@@ -46,6 +46,9 @@ export function createGameState() {
         // Multiple active notes for simultaneous launch
         activeNotes: [],
 
+        // Animation state flag to prevent multiple animation loops
+        isAnimating: false,
+
         // Timing and results
         timingIndicator: null,
         rallyResults: [],
@@ -182,6 +185,7 @@ export function resetGameState(state) {
     state.rallyState = null;
     state.currentNote = null;
     state.activeNotes = [];
+    state.isAnimating = false;
     state.timingIndicator = null;
     state.rallyResults = [];
     state.parryAttempted = false;
