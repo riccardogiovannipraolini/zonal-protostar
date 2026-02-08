@@ -31,16 +31,20 @@ function getLaneCenterX(laneIndex) {
  * Get lane start/end Y positions based on direction
  */
 function getLaneYPositions(isPlayerAttacker) {
-    const canvas = getCanvas();
-    const enemyCardY = layout.cardPositions.enemy[0].y + CARD.HEIGHT / 2;
-    const playerCardY = layout.cardPositions.player[0].y + CARD.HEIGHT / 2;
+    const enemyCardY = layout.cardPositions.enemy[0].y;
+    const playerCardY = layout.cardPositions.player[0].y;
+
+    // External Parry Points (Discs)
+    // "In front" means towards the center of the battlefield
+    const enemyParryY = enemyCardY + CARD.HEIGHT + 40; // Below enemy card
+    const playerParryY = playerCardY - 40;             // Above player card
 
     if (isPlayerAttacker) {
-        // Player attacking: notes travel from bottom (player) to top (enemy)
-        return { startY: playerCardY, endY: enemyCardY };
+        // Player attacking: From Player Shield to Enemy Shield
+        return { startY: playerParryY, endY: enemyParryY };
     } else {
-        // Enemy attacking: notes travel from top (enemy) to bottom (player)
-        return { startY: enemyCardY, endY: playerCardY };
+        // Enemy attacking: From Enemy Shield to Player Shield
+        return { startY: enemyParryY, endY: playerParryY };
     }
 }
 
@@ -160,13 +164,8 @@ function animateNotes() {
         note.x = note.startX; // X stays constant (vertical movement)
         const newY = note.startY + (note.endY - note.startY) * progress;
 
-        // CHECK IDENTITY CARD INTERSECTION
-        // Lane 0: 42% height
-        // Lane 1: 58% height
-        const laneYs = [
-            getCanvas().height * 0.42,
-            getCanvas().height * 0.58
-        ];
+        // CHECK IDENTITY CARD INTERSECTION (Single Lane at 50%)
+        const identityLaneY = getCanvas().height / 2;
 
         // Helper to check intersection
         const checkCrossed = (y, prevY, newY, direction) => {
@@ -177,16 +176,10 @@ function animateNotes() {
             }
         };
 
-        // Check Lane 0
-        if (!note.lane0EffectApplied && checkCrossed(laneYs[0], previousY, newY, note.direction)) {
-            applyIdentityEffect(note, laneYs[0], 0);
-            note.lane0EffectApplied = true;
-        }
-
-        // Check Lane 1
-        if (!note.lane1EffectApplied && checkCrossed(laneYs[1], previousY, newY, note.direction)) {
-            applyIdentityEffect(note, laneYs[1], 1);
-            note.lane1EffectApplied = true;
+        // Check Single Lane Intersection
+        if (!note.identityEffectApplied && checkCrossed(identityLaneY, previousY, newY, note.direction)) {
+            applyIdentityEffect(note);
+            note.identityEffectApplied = true;
         }
 
         note.y = newY;
@@ -370,20 +363,32 @@ export function attemptParry(targetLane = null) {
     // Calculate timing from perfect center
     const perfectStart = 1 - (note.timingIndicator.parryWindow / duration);
     const perfectCenter = (perfectStart + 1) / 2;
+    // msFromPerfect is deviation from center of the window
     const msFromPerfect = Math.abs(elapsed - (perfectCenter * duration));
 
-    // Current total window size for this bounce
-    const scaledParryWindow = RALLY.PARRY_WINDOW * Math.pow(RALLY.WINDOW_MULTIPLIER_PER_BOUNCE, note.bounceCount);
+    // --- 3-TIER PARRY LOGIC ---
+    // Total window shrinks with bounces: 200 * (0.8 ^ bounceCount)
+    // Imperfect zone = total window - perfect zone
+    // Perfect zone = Fixed ±50ms
 
-    // Conditions
-    const isPerfect = msFromPerfect <= 50;
-    const isInWindow = msFromPerfect <= scaledParryWindow / 2;
+    const bounceCount = note.bounceCount || 0;
+    const baseWindow = 200;
+    const shrinkFactor = Math.pow(0.8, bounceCount);
+    const scaledWindow = baseWindow * shrinkFactor;
+
+    const isPerfect = msFromPerfect <= 70;
+    const isInWindow = msFromPerfect <= scaledWindow / 2;
+
+    // Check Stamina for Imperfect availability
+    // "Imperfect disc: hidden when stamina = 0" -> implies imperfect parry is UNAVAILABLE
+    const canAffordImperfect = gameState.playerStamina > 0;
 
     if (isPerfect) {
-        // === PERFECT PARRY ===
-        // Effect: Bounce back + Speed Up + Stamina Gain
+        // === 1. PERFECT PARRY ===
+        // Limit: +/- 50ms
+        // Effect: Bounce back + Speed Up (1.1x) + Stamina Gain (+0.5)
 
-        // Stamina gain (+0.5)
+        // Stamina gain (+0.5), capped at max
         gameState.playerStamina = Math.min(gameState.playerStamina + 0.5, gameState.playerMaxStamina);
         showStaminaChange(0.5, 'player');
 
@@ -391,21 +396,26 @@ export function attemptParry(targetLane = null) {
         showImpactFeedback('PERFECT', note); // Green
 
         handleParrySuccess(note, true); // true = isPerfect
-    } else if (isInWindow) {
-        // === IMPERFECT PARRY ===
-        // Effect: Bounce back + Speed Reset + Stamina Cost
+
+    } else if (isInWindow && canAffordImperfect) {
+        // === 2. IMPERFECT PARRY ===
+        // Limit: Inside scaled window but > 50ms from center
+        // Condition: Player must have > 0 stamina
+        // Effect: Bounce back + Speed Reset (Base) + Stamina Cost (-0.5)
 
         // Stamina cost (-0.5)
         gameState.playerStamina -= 0.5;
-        // No min cap, can go negative as requested
+        // No min cap, can go negative
         showStaminaChange(-0.5, 'player');
 
         gameState.rallyResults.push({ lane: note.lane, result: 'PARRY' });
-        showImpactFeedback('GOOD', note); // Yellow (Imperfect)
+        showImpactFeedback('GOOD', note); // Yellow
 
-        handleParrySuccess(note, false); // false = not perfect
+        handleParrySuccess(note, false); // false = not perfect (imperfect)
+
     } else {
-        // === MISS (Timing off) ===
+        // === 3. MISS ===
+        // Outside window OR inside imperfect window but 0 stamina
         // Effect: Damage + Rally Ends
 
         const defenderSide = gameState.rallyState.currentDefender;
@@ -497,23 +507,49 @@ function bounceNote(note, isPerfect = true) {
         const bounceSpeedMultiplier = Math.pow(RALLY.SPEED_MULTIPLIER_PER_BOUNCE, newBounceCount);
         totalSpeedMultiplier = baseSpeed * bounceSpeedMultiplier;
     } else {
-        // Imperfect: Reset to base speed (punishment for poor timing is stamina loss + loss of momentum?)
-        // Wait, "Effect: Bounces back (rally continues)" - User said "note.speedMultiplier = 1.0; // RESET speed to base" in request.
-        // Assuming base speed multiplier from config.
-        totalSpeedMultiplier = RALLY.BASE_SPEED_MULTIPLIER || 1;
-
-        // IMPORTANT: We need to reset the logical bounce count FOR SPEED CALCULATION ONLY?
-        // Or act as if it's the first bounce? The user prompt said:
-        // "note.speedMultiplier = 1.0; // RESET speed to base"
-        // But we calculate speed dynamically based on bounceCount.
-        // To implement "Reset Speed", we effectively need to treat it as low speed.
-        // However, we MUST increment bounceCount for the window shrinking logic (which depends on bounceCount).
-        // PROPOSAL: We decouple visual speed from bounce count logic, OR we just set speed multiplier.
-        // Since we calculate duration from scratch here:
+        // Imperfect: Reset speed to base 1.3
+        // Note: We keep the bounce count incremented for window shrinking logic, 
+        // but for speed visualization/duration we pretend it's base speed.
+        totalSpeedMultiplier = 1.3;
     }
 
     // Recalculate duration
-    const scaledDuration = RALLY.NOTE_DURATION / totalSpeedMultiplier;
+    // Old: const scaledDuration = RALLY.NOTE_DURATION / totalSpeedMultiplier;
+    // New: We need to calculate Parry Duration and Total Duration based on Speed.
+
+    // Swap Y positions for full path
+    const newStartY = note.endY; // Was Card Impact
+    const newEndY = note.startY; // Was Start (previous Card Impact)
+
+    // Determine new Parry Target (Shield)
+    // If going toEnemy, target is enemyParryY.
+    // We can re-call getLaneYPositions or just derive it.
+    // Or just swap note.parryY to the other shield.
+    // note.parryY depends on direction.
+    // If direction BECOMES 'toEnemy' (player parried), target is Enemy Shield.
+
+    const isPlayerAttackingNow = note.direction === 'toPlayer'; // It WAS toPlayer, now becoming toEnemy
+    const { parryY: newParryY } = getLaneYPositions(isPlayerAttackingNow);
+
+    const distanceToParry = Math.abs(newParryY - newStartY);
+    const distanceTotal = Math.abs(newEndY - newStartY);
+
+    // Speed: Pixels per ms
+    // Base Speed (Distance / BaseDuration)
+    // We can just use the previous speed * multiplier?
+    // Let's use standard reference:
+    const baseStandardDuration = RALLY.NOTE_DURATION / RALLY.BASE_SPEED_MULTIPLIER;
+    const baseSpeed = distanceToParry / baseStandardDuration; // Px/ms for parry distance
+
+    const newSpeed = baseSpeed * totalSpeedMultiplier; // Or logic?
+
+    // Actually simpler:
+    // oldParryDuration = RALLY.NOTE_DURATION / totalSpeedMultiplier
+    const newParryDuration = RALLY.NOTE_DURATION / totalSpeedMultiplier;
+
+    // Speed = DistanceParry / newParryDuration
+    const currentSpeed = distanceToParry / newParryDuration;
+    const newTotalDuration = distanceTotal / currentSpeed;
 
     console.log(`[Rally] Bounce #${newBounceCount} (${isPerfect ? 'Perfect' : 'Imperfect'}) - Speed: ${totalSpeedMultiplier.toFixed(2)}x`);
 
@@ -522,19 +558,18 @@ function bounceNote(note, isPerfect = true) {
         startTensionLoop(newBounceCount);
     }
 
-    // Swap Y positions only - X stays fixed to lane
-    const newStartY = note.endY;
-    const newEndY = note.startY;
-
     // Update note for bounce
     note.startY = newStartY;
     note.endY = newEndY;
+    note.parryY = newParryY;
     note.progress = 0;
     note.startTime = Date.now();
-    note.duration = scaledDuration;
-    note.direction = note.direction === 'toEnemy' ? 'toPlayer' : 'toEnemy';
+    note.duration = newParryDuration; // For timing indicator
+    note.totalDuration = newTotalDuration; // For movement
+    note.direction = isPlayerAttackingNow ? 'toEnemy' : 'toPlayer';
     note.bounceCount = newBounceCount;
     note.parryAttempted = false;
+    note.missedParry = false;
     note.timingIndicator = null;
     note.aiParryScheduled = false;
 
@@ -560,11 +595,11 @@ function showImpactFeedback(result, note) {
 
     let text, color;
     if (result === 'PERFECT') {
-        text = '✨ PERFECT! ✨';
+        text = 'PERFECT!';
         color = '#2ecc71'; // Green
         playParrySound(note.bounceCount || 0);
     } else if (result === 'GOOD') {
-        text = '⚠ GOOD';
+        text = 'GOOD';
         color = '#f1c40f'; // Yellow
         playParrySound(note.bounceCount || 0);
     } else if (result === 'RETURN') {
@@ -800,4 +835,112 @@ export function getRallyAttacker() {
 export function spawnNextNote() {
     // No longer used - simultaneous spawning now handled by scheduleNoteSpawns
     console.warn('[Rally] spawnNextNote is deprecated');
+}
+
+/**
+ * Apply identity card effect when note crosses a lane
+ */
+/**
+ * Apply identity card effect when note crosses the center lane
+ */
+function applyIdentityEffect(note) {
+    if (!gameState) return;
+
+    // Check direction to determine whose territory the note is entering/effects apply to
+    // Notes traveling "toPlayer" enter Player's territory -> Player Identity Cards apply
+    // Notes traveling "toEnemy" enter Enemy's territory -> Enemy Identity Cards apply
+
+    const side = note.direction === 'toPlayer' ? 'player' : 'enemy';
+    const identityCards = side === 'player' ? gameState.playerIdentityCards : gameState.enemyIdentityCards;
+
+    if (!identityCards) return;
+
+    // Apply effects from ALL identity cards (Single Lane Shared)
+    identityCards.forEach(card => {
+        if (!card) return;
+
+        // Metronomo (Passive)
+        // "Notes crossing this lane get -0.15 speed" (Value 0.85)
+        if (card.id === 'METRONOMO') {
+            const speedMult = card.value || 0.85;
+            applySpeedChange(note, speedMult);
+            showIdentityEffectFeedback(note, 'SLOW', '#3498db');
+        }
+
+        // Scudo (Active)
+        // "Spend 2 Stamina: Next 3 notes crossing get -50% speed. CD: 3."
+        if (card.id === 'SCUDO' && card.active && card.currentCharges > 0) {
+            const speedMult = card.value || 0.5;
+            applySpeedChange(note, speedMult);
+            showIdentityEffectFeedback(note, 'SHIELD', '#2ecc71');
+
+            // Consume charge
+            card.currentCharges--;
+            console.log(`[Rally] Scudo consumed charge. Remaining: ${card.currentCharges}`);
+            if (card.currentCharges <= 0) {
+                card.active = false;
+                console.log('[Rally] Scudo deactivated');
+            }
+        }
+    });
+}
+
+/**
+ * Apply speed change to a note by adjusting duration
+ * @param {Object} note 
+ * @param {number} multiplier (e.g. 0.85 for 15% slower)
+ */
+function applySpeedChange(note, multiplier) {
+    const now = Date.now();
+    const elapsed = now - note.startTime;
+    const currentProgress = elapsed / note.duration;
+
+    // Prevent division by zero or negative/zero duration craziness
+    if (note.duration <= 0) return;
+
+    const oldDuration = note.duration;
+    const newDuration = oldDuration / multiplier;
+
+    note.duration = newDuration;
+    // Adjust startTime so progress remains continuous
+    note.startTime = now - (currentProgress * newDuration);
+
+    console.log(`[Rally] Note ${note.id} speed * ${multiplier}. Duration: ${oldDuration.toFixed(0)} -> ${newDuration.toFixed(0)}`);
+}
+
+/**
+ * Show feedback for identity effect
+ */
+function showIdentityEffectFeedback(note, text, color) {
+    const floatingText = {
+        text: text,
+        x: note.x,
+        y: note.y,
+        opacity: 1,
+        color: color,
+        startTime: Date.now()
+    };
+    gameState.floatingTexts.push(floatingText);
+
+    // Start animation loop for this text
+    const textDuration = 1000;
+    const animateText = () => {
+        // Check if text still exists in state (it might be cleared on reset)
+        if (!gameState.floatingTexts.includes(floatingText)) return;
+
+        const elapsed = Date.now() - floatingText.startTime;
+        const progress = elapsed / textDuration;
+
+        if (progress < 1) {
+            floatingText.y -= 0.5; // Slow float up
+            floatingText.opacity = 1 - progress;
+            if (renderFn) renderFn();
+            requestAnimationFrame(animateText);
+        } else {
+            // Remove self from state
+            gameState.floatingTexts = gameState.floatingTexts.filter(t => t !== floatingText);
+            if (renderFn) renderFn();
+        }
+    };
+    requestAnimationFrame(animateText);
 }

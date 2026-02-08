@@ -228,12 +228,19 @@ function drawNote(ctx, note) {
         ctx.restore();
     }
 
-    // Draw the note icon
+    // Draw the note circle
     ctx.fillStyle = noteColor;
-    ctx.font = 'bold 50px "Segoe UI", sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('♪', 0, 0);
+    ctx.shadowColor = noteColor;
+    ctx.shadowBlur = 10;
+
+    ctx.beginPath();
+    ctx.arc(0, 0, 15, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Add a light inner glow/border
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 2;
+    ctx.stroke();
 
     ctx.restore();
 }
@@ -246,57 +253,160 @@ function drawTimingIndicator(ctx, gameState, note) {
 
     const bounceCount = note.bounceCount || 0;
     const elapsed = Date.now() - note.timingIndicator.startTime;
-    const progress = Math.min(elapsed / note.timingIndicator.duration, 1);
+    const duration = note.timingIndicator.duration;
 
-    const baseMaxRadius = CARD.WIDTH * 0.75;
-    const baseMinRadius = CARD.WIDTH * 0.5;
+    // Safety check div/0
+    if (duration <= 0) return;
 
-    const circleScale = getTimingCircleScale(bounceCount);
-    const maxRadius = baseMaxRadius * circleScale;
-    const minRadius = baseMinRadius * circleScale;
-    const currentRadius = maxRadius - (maxRadius - minRadius) * progress;
+    const progress = Math.min(elapsed / duration, 1);
+    const timeToImpact = duration * (1 - progress);
+
+    const baseMaxRadius = 60;
+    const baseMinRadius = 15;
+
+    // Pixel Scale (Pixels per Ms)
+    // Distance from Max to Min radius must be traversed in 'duration' time?
+    // Actually, usually the Approach Ring shrinks from Max to Min.
+    // Let's assume MinRadius is the "Impact Line".
+
+    const scaleFactor = 1.0; // Can tweak this
+    // Pixels per MS: How fast the ring shrinks
+    const pixelsPerMs = (baseMaxRadius - baseMinRadius) / duration;
+
+    // Calculate Center Time of the Window
+    // Window is [Impact - scaledWindow, Impact] generally?
+    // Logic in attemptParry uses perfectCenter based on window size.
+    // scaledWindow = 200 * 0.8^bounce
+    const baseWindow = 200;
+    const shrinkFactor = Math.pow(0.8, bounceCount);
+    const scaledWindow = baseWindow * shrinkFactor;
+
+    // Ideally, the "Center" of the parry is at Impact - (Window/2)
+    const timeRemainingAtCenter = scaledWindow / 2;
+
+    // Radius mapping function
+    // R(t_left) = MinRadius + (pixelsPerMs * t_left * multiplier?)
+    // To make it visible, let's just map directly relative to MinRadius.
+    // But we need the Approach Ring to cross the Perfect Line at the right time.
+    // Approach Ring Radius = Min + pixelsPerMs * timeToImpact ???
+    // If we use linear interpolation:
+    const approachRadius = baseMinRadius + (baseMaxRadius - baseMinRadius) * (timeToImpact / duration);
+
+    // Target Radii
+    // Perfect Zone: Center ± 50ms
+    const perfectHalfWidth = 50;
+    const perfectUpperTime = timeRemainingAtCenter + perfectHalfWidth;
+    const perfectLowerTime = timeRemainingAtCenter - perfectHalfWidth;
+
+    // Ensure lower bounds don't go below 0 (impact)
+    const rPerfectUpper = baseMinRadius + (baseMaxRadius - baseMinRadius) * (perfectUpperTime / duration);
+    const rPerfectLower = baseMinRadius + (baseMaxRadius - baseMinRadius) * (Math.max(0, perfectLowerTime) / duration);
+
+    // Imperfect Zone: Center ± Window/2
+    const imperfectHalfWidth = scaledWindow / 2;
+    const imperfectUpperTime = timeRemainingAtCenter + imperfectHalfWidth;
+    const imperfectLowerTime = timeRemainingAtCenter - imperfectHalfWidth; // Should be ~0
+
+    const rImperfectUpper = baseMinRadius + (baseMaxRadius - baseMinRadius) * (imperfectUpperTime / duration);
+    const rImperfectLower = baseMinRadius + (baseMaxRadius - baseMinRadius) * (Math.max(0, imperfectLowerTime) / duration);
+
+    // Ensure visual visibility (min delta)
+    const minDiff = 2;
 
     const centerX = note.endX;
     const centerY = note.endY;
 
-    const circleColor = getTimingCircleColor(bounceCount);
+    // 1. IMPERFECT DISC (Outer) - Yellow
+    // Only visible if Stamina > 0
+    if (gameState.playerStamina > 0 && gameState.rallyState.currentDefender === 'player') {
+        ctx.save();
+        ctx.strokeStyle = '#f1c40f'; // Yellow
+        ctx.lineWidth = 4;
+        ctx.globalAlpha = 0.6;
+        ctx.setLineDash([5, 5]); // Dashed for imperfect
 
-    const perfectStart = 1 - (note.timingIndicator.parryWindow / note.timingIndicator.duration);
-    const displayColor = progress >= perfectStart ? '#2ecc71' : circleColor;
+        ctx.beginPath();
+        // Draw Ring between Upper and Lower? Or just lines?
+        // Prompt says: "Dynamic size: starts at 200ms diameter... Surrounds the perfect disc"
+        // "Yellow/orange outline, thick border"
 
+        // Let's draw the Outer Boundary of Imperfect
+        ctx.arc(centerX, centerY, rImperfectUpper, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Inner boundary (overlap with perfect?)
+        // Let's just draw the zone as a thick band if needed, or just the outer limit
+        // "Disc" usually implies filled or ring.
+        // Let's draw a thick ring covering the Imperfect Zone
+        ctx.beginPath();
+        ctx.lineWidth = Math.max(2, rImperfectUpper - rPerfectUpper); // Fill the gap? 
+        // Actually simple outline is cleaner.
+
+        ctx.restore();
+    }
+
+    // 2. PERFECT DISC (Inner) - Green
+    // Fixed size: ±50ms from center.
+    // Always visible.
     ctx.save();
-
-    ctx.strokeStyle = displayColor;
-    ctx.lineWidth = 3 + (bounceCount * 0.5);
-    ctx.shadowColor = displayColor;
-    ctx.shadowBlur = 15 + (bounceCount * 5);
+    ctx.strokeStyle = '#2ecc71'; // Green
+    ctx.lineWidth = 3;
+    ctx.shadowColor = '#2ecc71';
+    ctx.shadowBlur = 10;
 
     ctx.beginPath();
-    ctx.arc(centerX, centerY, currentRadius, 0, Math.PI * 2);
+    // Draw Upper Boundary of Perfect
+    ctx.arc(centerX, centerY, rPerfectUpper, 0, Math.PI * 2);
     ctx.stroke();
 
-    if (bounceCount >= 3) {
-        ctx.strokeStyle = circleColor;
-        ctx.globalAlpha = 0.4;
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.arc(centerX, centerY, currentRadius * 0.7, 0, Math.PI * 2);
-        ctx.stroke();
-    }
+    // Draw Lower Boundary?
+    // If it's a "Disc", maybe fill it lightly?
+    ctx.fillStyle = 'rgba(46, 204, 113, 0.1)';
+    ctx.fill();
+
+    ctx.beginPath();
+    // Center Line of Perfect (Optimal Hit)
+    const rCenter = baseMinRadius + (baseMaxRadius - baseMinRadius) * (timeRemainingAtCenter / duration);
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 1;
+    ctx.globalAlpha = 0.5;
+    ctx.arc(centerX, centerY, rCenter, 0, Math.PI * 2);
+    ctx.stroke();
 
     ctx.restore();
 
-    // Draw parry prompt for player
+    // 3. APPROACH RING - White
+    ctx.save();
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 4;
+    ctx.shadowColor = '#ffffff';
+    ctx.shadowBlur = 5;
+
+    // Pulse effect
+    const pulse = 1 + Math.sin(Date.now() / 50) * 0.05;
+
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, approachRadius, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+
+    // Parry Prompt
     if (gameState.rallyState && gameState.rallyState.currentDefender === 'player') {
         ctx.save();
         ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 14px "Segoe UI", sans-serif';
+        ctx.font = 'bold 12px "Segoe UI", sans-serif';
         ctx.textAlign = 'center';
         ctx.shadowColor = '#000000';
         ctx.shadowBlur = 5;
 
-        const promptText = bounceCount >= 3 ? '⚡ QUICK! Q/W/E/R ⚡' : 'PRESS Q/W/E/R TO PARRY';
-        ctx.fillText(promptText, centerX, centerY + currentRadius + 20);
+        // Show stamina warning if low
+        if (gameState.playerStamina <= 0) {
+            ctx.fillStyle = '#ff4757';
+            ctx.fillText('ONLY PERFECT!', centerX, centerY + baseMaxRadius + 30);
+        } else {
+            const promptText = bounceCount >= 3 ? '⚡' : 'PARRY';
+            ctx.fillText(promptText, centerX, centerY + baseMaxRadius + 30);
+        }
         ctx.restore();
     }
 }

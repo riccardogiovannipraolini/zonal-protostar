@@ -108,19 +108,23 @@ export function updateCardPositions() {
 
     // Identity Card Positions (Left/Right edges)
     // 2 cards per side
-    const leftY = canvas.height * 0.42; // Top Lane
-    const rightY = canvas.height * 0.58; // Bottom Lane
+    // SINGLE CENTER LANE
+    const centerY = canvas.height / 2;
     const width = 80;
     const height = 100;
 
+    layout.identityLaneY = centerY;
+
     layout.identityCardPositions = {
         player: [
-            { x: 20, y: leftY, width, height },   // Top (Left implied)
-            { x: 20, y: rightY, width, height }   // Bottom (Right implied)
+            { x: 20, y: centerY - height / 2, width, height },   // Left Slot (Metronomo)
+            { x: canvas.width - width - 20, y: centerY - height / 2, width, height }   // Right Slot (Scudo)
         ],
         enemy: [
-            { x: canvas.width - width - 20, y: leftY, width, height }, // Top
-            { x: canvas.width - width - 20, y: rightY, width, height } // Bottom
+            { x: 20, y: centerY - height / 2, width, height },   // Left Slot (Shared physical space with Player Left?)
+
+            { x: 20, y: centerY - height / 2, width, height }, // Enemy Left
+            { x: canvas.width - width - 20, y: centerY - height / 2, width, height } // Enemy Right
         ]
     };
 }

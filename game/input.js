@@ -343,30 +343,34 @@ function handleMouseMove(event) {
         }
     }
 
-    // Check Identity Cards
-    // Left Identity (Player)
-    if (layout.identityCardPositions.player && layout.identityCardPositions.player[0]) {
-        const pos = layout.identityCardPositions.player[0];
-        if (gameState.playerIdentityCards && gameState.playerIdentityCards[0]) {
+    // Check Identity Cards (Player Only for interaction)
+    if (layout.identityCardPositions.player) {
+        layout.identityCardPositions.player.forEach((pos, index) => {
             if (x >= pos.x && x <= pos.x + pos.width &&
                 y >= pos.y && y <= pos.y + pos.height) {
-                gameState.hoveredIdentityCard = { side: 'player', index: 0 };
-                isOverInteractable = true;
+                // Check if card exists
+                if (gameState.playerIdentityCards && gameState.playerIdentityCards[index]) {
+                    gameState.hoveredIdentityCard = { side: 'player', index: index };
+                    isOverInteractable = true;
+                }
             }
-        }
+        });
     }
 
-    // Right Identity (Enemy)
-    if (layout.identityCardPositions.enemy && layout.identityCardPositions.enemy[0]) {
-        const pos = layout.identityCardPositions.enemy[0];
-        if (gameState.enemyIdentityCards && gameState.enemyIdentityCards[0]) {
+    // Check Identity Cards (Enemy - for tooltip only)
+    /*
+    if (layout.identityCardPositions.enemy) {
+        layout.identityCardPositions.enemy.forEach((pos, index) => {
             if (x >= pos.x && x <= pos.x + pos.width &&
                 y >= pos.y && y <= pos.y + pos.height) {
-                gameState.hoveredIdentityCard = { side: 'enemy', index: 0 };
-                isOverInteractable = true;
+                if (gameState.enemyIdentityCards && gameState.enemyIdentityCards[index]) {
+                    gameState.hoveredIdentityCard = { side: 'enemy', index: index };
+                    isOverInteractable = true;
+                }
             }
-        }
+        });
     }
+    */
 
     // Re-render if identity hover changed
     if (gameState.hoveredIdentityCard) renderFn();

@@ -66,12 +66,60 @@ export function createGameState() {
         // Format: [LeftCard, RightCard]
         // Player: Left=[Metronomo], Right=[Scudo] (cloned)
         playerIdentityCards: [
-            { ...IDENTITY_CARDS.METRONOMO, instanceId: 'p_id_0' },
-            { ...IDENTITY_CARDS.SCUDO, instanceId: 'p_id_1', currentCooldown: 0, active: false, currentCharges: 0 }
+            {
+                id: 'METRONOMO',
+                name: 'Metronomo Spezzato',
+                type: 'PASSIVE',
+                description: 'Notes crossing center lane get -0.15 speed',
+                effect: 'SLOW',
+                value: 0.85,
+                cost: 0,
+                cooldown: 0,
+                instanceId: 'p_id_0'
+            },
+            {
+                id: 'SCUDO',
+                name: 'Scudo Armonico',
+                type: 'ACTIVE',
+                description: 'Spend 2 Stamina: Next 3 notes crossing get -50% speed. CD: 3.',
+                effect: 'SHIELD',
+                value: 0.5,
+                charges: 3,
+                cost: 2,
+                cooldown: 3,
+                instanceId: 'p_id_1',
+                currentCooldown: 0,
+                active: false,
+                currentCharges: 0
+            }
         ],
         enemyIdentityCards: [
-            { ...IDENTITY_CARDS.METRONOMO, instanceId: 'e_id_0' },
-            { ...IDENTITY_CARDS.SCUDO, instanceId: 'e_id_1', currentCooldown: 0, active: false, currentCharges: 0 }
+            {
+                id: 'METRONOMO',
+                name: 'Metronomo Spezzato',
+                type: 'PASSIVE',
+                description: 'Notes crossing center lane get -0.15 speed',
+                effect: 'SLOW',
+                value: 0.85,
+                cost: 0,
+                cooldown: 0,
+                instanceId: 'e_id_0'
+            },
+            {
+                id: 'SCUDO',
+                name: 'Scudo Armonico',
+                type: 'ACTIVE',
+                description: 'Spend 2 Stamina: Next 3 notes crossing get -50% speed. CD: 3.',
+                effect: 'SHIELD',
+                value: 0.5,
+                charges: 3,
+                cost: 2,
+                cooldown: 3,
+                instanceId: 'e_id_1',
+                currentCooldown: 0,
+                active: false,
+                currentCharges: 0
+            }
         ],
 
         // UI state
@@ -88,6 +136,11 @@ export function createGameState() {
     calculateChordBonuses(initialState.playerCards);
     calculateChordBonuses(initialState.enemyCards);
 
+    // DEBUG: Verify Identity Cards
+    console.log('[State] Identity Cards Raw:', IDENTITY_CARDS);
+    console.log('[State] Player Identity Cards:', initialState.playerIdentityCards);
+    console.log('[State] Enemy Identity Cards:', initialState.enemyIdentityCards);
+
     return initialState;
 }
 
@@ -98,14 +151,7 @@ export function resetGameState(state) {
     // Reset cards
     state.playerCards = PLAYER_CARDS.map(c => ({ ...c }));
     state.enemyCards = ENEMY_CARDS.map(c => ({ ...c }));
-    state.playerIdentityCards = [
-        { ...IDENTITY_CARDS.METRONOMO, instanceId: 'p_id_0' },
-        { ...IDENTITY_CARDS.SCUDO, instanceId: 'p_id_1', currentCooldown: 0, active: false, currentCharges: 0 }
-    ];
-    state.enemyIdentityCards = [
-        { ...IDENTITY_CARDS.METRONOMO, instanceId: 'e_id_0' },
-        { ...IDENTITY_CARDS.SCUDO, instanceId: 'e_id_1', currentCooldown: 0, active: false, currentCharges: 0 }
-    ];
+
 
     // Apply chord bonuses
     calculateChordBonuses(state.playerCards);

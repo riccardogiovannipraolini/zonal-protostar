@@ -1,7 +1,7 @@
 // ===== UI RENDERING =====
 
 import { COLORS, STAMINA } from '../data/cards.js';
-import { getCtx, getCanvas } from './canvas.js';
+import { getCtx, getCanvas, layout } from './canvas.js';
 
 /**
  * Draw phase indicator at top
@@ -84,7 +84,7 @@ export function drawBattleTimer(gameState) {
 function drawStaminaBar(x, y, width, height, current, max, side) {
     const ctx = getCtx();
     const isPlayer = side === 'player';
-    const isExhausted = current === 0;
+    const isExhausted = current <= 0;
 
     ctx.save();
 
@@ -95,7 +95,9 @@ function drawStaminaBar(x, y, width, height, current, max, side) {
     ctx.fill();
 
     // Fill bar
-    const fillWidth = (current / max) * (width - 4);
+    const ratio = Math.max(0, current / max);
+    const fillWidth = ratio * (width - 4);
+
     if (fillWidth > 0) {
         const gradient = ctx.createLinearGradient(x, y, x + fillWidth, y);
         if (isExhausted) {
@@ -127,7 +129,12 @@ function drawStaminaBar(x, y, width, height, current, max, side) {
     ctx.shadowBlur = 3;
 
     if (isExhausted) {
-        ctx.fillText('EXHAUSTED', x + width / 2, y + height / 2);
+        // Show actual value even if exhausted if negative
+        if (current < 0) {
+            ctx.fillText(`⚡ ${current}/${max}`, x + width / 2, y + height / 2);
+        } else {
+            ctx.fillText('EXHAUSTED', x + width / 2, y + height / 2);
+        }
     } else {
         ctx.fillText(`⚡ ${current}/${max}`, x + width / 2, y + height / 2);
     }
@@ -352,24 +359,28 @@ export function drawTooltip(gameState) {
 
     if (!card) return;
 
-    // Position tooltip near the card
-    // Player ID card is Left, Enemy is Right.
-    // Tooltip should be towards center to avoid going off screen.
     const ctx = getCtx();
     const canvas = getCanvas();
 
-    let x, y;
-    if (side === 'player') {
-        x = 100; // Right of player card
-        y = canvas.height / 2;
-    } else {
-        x = canvas.width - 260; // Left of enemy card
-        y = canvas.height / 2;
-    }
+    // Get card position to place tooltip nearby
+    const positions = layout.identityCardPositions[side];
+    if (!positions || !positions[index]) return;
+    const cardPos = positions[index];
 
     const width = 200;
-    const height = 80; // Approximate
+    const height = 80;
     const padding = 10;
+
+    let x, y;
+    // If card is on Left side (x < center), tooltip to Right
+    // If card is on Right side (x > center), tooltip to Left
+    if (cardPos.x < canvas.width / 2) {
+        x = cardPos.x + cardPos.width + 10;
+        y = cardPos.y + cardPos.height / 2;
+    } else {
+        x = cardPos.x - width - 10;
+        y = cardPos.y + cardPos.height / 2;
+    }
 
     ctx.save();
 
@@ -400,13 +411,9 @@ export function drawTooltip(gameState) {
     // Description
     ctx.fillStyle = '#ffffff';
     ctx.font = '11px "Segoe UI", sans-serif';
-    // Simple text wrapping if needed, but for now short description
     ctx.fillText(card.description || 'No description', x + padding, y - height / 2 + padding + 30);
 
-    // HP
-    ctx.fillStyle = '#ff4757';
-    ctx.textAlign = 'right';
-    ctx.fillText(`${card.hp}/${card.maxHp} HP`, x + width - padding, y - height / 2 + padding);
+    // HP Removed (Indestructible)
 
     ctx.restore();
 }

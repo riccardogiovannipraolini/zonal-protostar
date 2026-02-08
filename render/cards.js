@@ -38,16 +38,7 @@ export function drawBattlefield() {
     ctx.stroke();
     ctx.restore();
 
-    // VS symbol
-    ctx.save();
-    ctx.fillStyle = '#e94560';
-    ctx.font = 'bold 20px "Segoe UI", sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.shadowColor = '#e94560';
-    ctx.shadowBlur = 20;
-    ctx.fillText('⚔ VS ⚔', canvas.width / 2, canvas.height / 2);
-    ctx.restore();
+    // VS symbol removed as requested
 
     // Side labels
     ctx.save();
@@ -340,6 +331,7 @@ function drawIdentityCards(gameState) {
     }
 
     // Enemy Identity Cards
+    /*
     if (gameState.enemyIdentityCards) {
         gameState.enemyIdentityCards.forEach((card, index) => {
             if (card && positions.enemy[index]) {
@@ -347,8 +339,12 @@ function drawIdentityCards(gameState) {
             }
         });
     }
+    */
 }
 
+/**
+ * Draw a single identity card
+ */
 /**
  * Draw a single identity card
  */
@@ -357,7 +353,6 @@ function drawSingleIdentityCard(pos, card, side) {
     const isPlayer = side === 'player';
 
     // Card background
-    // Card Background
     ctx.save();
 
     // Check for Active State (Scudo)
@@ -433,19 +428,7 @@ function drawSingleIdentityCard(pos, card, side) {
     ctx.fillText(words[0], pos.x + pos.width / 2, pos.y + 20);
     if (words[1]) ctx.fillText(words[1], pos.x + pos.width / 2, pos.y + 32);
 
-    // Hearts (HP)
-    const heartSize = 8;
-    const padding = 2;
-    const totalW = (card.maxHp * heartSize) + ((card.maxHp - 1) * padding);
-    let startX = pos.x + (pos.width - totalW) / 2;
-
-    for (let i = 0; i < card.maxHp; i++) {
-        if (i < card.hp) {
-            drawHeart(startX + i * (heartSize + padding) + heartSize / 2, pos.y + pos.height - 15, heartSize);
-        } else {
-            drawEmptyHeart(startX + i * (heartSize + padding) + heartSize / 2, pos.y + pos.height - 15, heartSize);
-        }
-    }
+    // NO HP for Identity Cards
 
     ctx.restore();
 }
@@ -456,59 +439,58 @@ function drawSingleIdentityCard(pos, card, side) {
 /**
  * Draw Horizontal Lanes projected by Identity Cards
  */
+/**
+ * Draw Horizontal Lanes projected by Identity Cards
+ */
 export function drawHorizontalLanes(gameState) {
-    const positions = layout.identityCardPositions;
     const ctx = getCtx();
     const canvas = getCanvas();
-
-    // Draw Lane 0 (Top/Left)
-    if (positions.player[0]) {
-        drawLane(ctx, canvas, positions.player[0], gameState.playerIdentityCards?.[0], gameState.enemyIdentityCards?.[0]);
-    }
-
-    // Draw Lane 1 (Bottom/Right)
-    if (positions.player[1]) {
-        drawLane(ctx, canvas, positions.player[1], gameState.playerIdentityCards?.[1], gameState.enemyIdentityCards?.[1]);
-    }
-}
-
-function drawLane(ctx, canvas, pos, playerCard, enemyCard) {
-    if (!pos) return;
-
-    const y = pos.y + pos.height / 2;
-
-    const hasPlayer = playerCard && playerCard.hp > 0;
-    const hasEnemy = enemyCard && enemyCard.hp > 0;
-    const isActive = hasPlayer || hasEnemy;
+    const y = layout.identityLaneY || canvas.height / 2;
 
     ctx.save();
     ctx.beginPath();
     ctx.moveTo(0, y);
     ctx.lineTo(canvas.width, y);
 
-    if (isActive) {
+    // Determine Lane Style based on ALL cards (Player + Enemy)
+    const allCards = [
+        ...(gameState.playerIdentityCards || []),
+        ...(gameState.enemyIdentityCards || [])
+    ];
+
+    const hasMetronomo = allCards.some(c => c && c.id === 'METRONOMO'); // Passive Always On
+    const hasActiveScudo = allCards.some(c => c && c.id === 'SCUDO' && c.active);
+
+    ctx.lineWidth = 3;
+
+    if (hasActiveScudo && hasMetronomo) {
+        // Combined Effect
+        const grad = ctx.createLinearGradient(0, y, canvas.width, y);
+        grad.addColorStop(0, '#3498db'); // Blue
+        grad.addColorStop(0.5, '#2ecc71'); // Green
+        grad.addColorStop(1, '#3498db');
+        ctx.strokeStyle = grad;
+        ctx.shadowColor = '#00ffaa'; // Cyan-ish glow
+        ctx.shadowBlur = 15;
+        ctx.setLineDash([]); // Solid
+    } else if (hasActiveScudo) {
+        // Green Pulse
+        ctx.strokeStyle = '#2ecc71';
+        ctx.shadowColor = '#2ecc71';
+        ctx.shadowBlur = 15;
         ctx.setLineDash([]);
-        ctx.lineWidth = 2;
-
-        let color = '#3498db'; // Default Blue (Metronomo)
-        let glow = false;
-
-        // Check for Scudo Active
-        if ((playerCard?.active) || (enemyCard?.active)) {
-            color = '#2ecc71'; // Green
-            glow = true;
-        }
-
-        ctx.strokeStyle = color;
-
-        if (glow) {
-            ctx.shadowColor = color;
-            ctx.shadowBlur = 10;
-        }
+    } else if (hasMetronomo) {
+        // Blue Glow
+        ctx.strokeStyle = '#3498db';
+        ctx.shadowColor = '#3498db';
+        ctx.shadowBlur = 10;
+        ctx.setLineDash([]);
     } else {
+        // Inactive - Dashed
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
         ctx.setLineDash([10, 10]);
         ctx.lineWidth = 1;
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+        ctx.shadowBlur = 0;
     }
 
     ctx.stroke();

@@ -171,45 +171,90 @@ export function aiTurn() {
 export function aiRepositionPhase() {
     console.log('[AI] Starting Reposition Phase');
 
-    // 20% chance to swap
-    const shouldSwap = Math.random() < 0.2;
+    // 1. Check for active lines (Both Player and Enemy alive in same lane)
+    const activeLines = [];
+    for (let i = 0; i < 4; i++) {
+        if (gameState.enemyCards[i].pv > 0 && gameState.playerCards[i].pv > 0) {
+            activeLines.push(i);
+        }
+    }
 
-    if (shouldSwap) {
-        // Simple logic: Swap a low HP card with a high HP card?
-        // Or just random swap for "tactics" simulation
+    let forceSwap = false;
+    let swapSource = -1; // Index of enemy card to move
+    let swapTarget = -1; // Index of lane to move TO
 
-        // Let's find lowest HP active card
-        let lowestIdx = -1;
-        let lowestPv = Infinity;
-        gameState.enemyCards.forEach((c, i) => {
-            if (c.pv > 0 && c.pv < lowestPv) {
-                lowestPv = c.pv;
-                lowestIdx = i;
-            }
-        });
+    if (activeLines.length === 0) {
+        console.log('[AI] No active lines found. Attempting forced repositioning.');
 
-        // Find best candidate to swap with (e.g., highest HP)
-        let highestIdx = -1;
-        let highestPv = -1;
-        gameState.enemyCards.forEach((c, i) => {
-            if (i !== lowestIdx && c.pv > highestPv) {
-                highestPv = c.pv;
-                highestIdx = i;
-            }
-        });
+        const aliveEnemyIndices = gameState.enemyCards
+            .map((c, i) => ({ c, i }))
+            .filter(item => item.c.pv > 0)
+            .map(item => item.i);
 
-        if (lowestIdx !== -1 && highestIdx !== -1) {
-            console.log(`[AI] Repositioning: Swapping ${lowestIdx} (${gameState.enemyCards[lowestIdx].name}) with ${highestIdx} (${gameState.enemyCards[highestIdx].name})`);
+        const alivePlayerIndices = gameState.playerCards
+            .map((c, i) => ({ c, i }))
+            .filter(item => item.c.pv > 0)
+            .map(item => item.i);
 
-            // Swap
-            const temp = gameState.enemyCards[lowestIdx];
-            gameState.enemyCards[lowestIdx] = gameState.enemyCards[highestIdx];
-            gameState.enemyCards[highestIdx] = temp;
+        if (aliveEnemyIndices.length > 0 && alivePlayerIndices.length > 0) {
+            forceSwap = true;
+            // Pick a random alive enemy
+            swapSource = aliveEnemyIndices[Math.floor(Math.random() * aliveEnemyIndices.length)];
+            // Pick a random lane with alive player
+            swapTarget = alivePlayerIndices[Math.floor(Math.random() * alivePlayerIndices.length)];
 
+            console.log(`[AI] Forced Strategy: Moving Unit ${swapSource} to Lane ${swapTarget}`);
+        }
+    }
+
+    // 2. Execute Swap (Forced or Random)
+    if (forceSwap) {
+        // execute forced swap
+        if (swapSource !== swapTarget) {
+            const temp = gameState.enemyCards[swapSource];
+            gameState.enemyCards[swapSource] = gameState.enemyCards[swapTarget];
+            gameState.enemyCards[swapTarget] = temp;
             renderFn();
+            console.log('[AI] Forced Reposition Complete');
         }
     } else {
-        console.log('[AI] Skipping Reposition');
+        // Standard Behavior: 20% chance to swap
+        const shouldSwap = Math.random() < 0.2;
+
+        if (shouldSwap) {
+            // Find lowest HP active card
+            let lowestIdx = -1;
+            let lowestPv = Infinity;
+            gameState.enemyCards.forEach((c, i) => {
+                if (c.pv > 0 && c.pv < lowestPv) {
+                    lowestPv = c.pv;
+                    lowestIdx = i;
+                }
+            });
+
+            // Find best candidate to swap with (e.g., highest HP)
+            let highestIdx = -1;
+            let highestPv = -1;
+            gameState.enemyCards.forEach((c, i) => {
+                if (i !== lowestIdx && c.pv > highestPv) {
+                    highestPv = c.pv;
+                    highestIdx = i;
+                }
+            });
+
+            if (lowestIdx !== -1 && highestIdx !== -1) {
+                console.log(`[AI] Repositioning: Swapping ${lowestIdx} (${gameState.enemyCards[lowestIdx].name}) with ${highestIdx} (${gameState.enemyCards[highestIdx].name})`);
+
+                // Swap
+                const temp = gameState.enemyCards[lowestIdx];
+                gameState.enemyCards[lowestIdx] = gameState.enemyCards[highestIdx];
+                gameState.enemyCards[highestIdx] = temp;
+
+                renderFn();
+            }
+        } else {
+            console.log('[AI] Skipping Reposition');
+        }
     }
 
     // Proceed to Selection
