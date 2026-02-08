@@ -97,17 +97,46 @@ export function startRallyPhase(attacker, attackerIndex) {
  * Schedule note spawns with simultaneous launch for different lanes
  */
 function scheduleNoteSpawns(isPlayerAttacker, notesByLane) {
-    const { startY, endY } = getLaneYPositions(isPlayerAttacker);
-    const baseDuration = RALLY.NOTE_DURATION / RALLY.BASE_SPEED_MULTIPLIER;
+    const { startY, endY, parryY } = getLaneYPositions(isPlayerAttacker);
+
+    // Determine detailed speed modifiers per PASSIVE checks
+    // 1. Attacker Passive (Origami)
+    const attackerCards = isPlayerAttacker ? gameState.playerCards : gameState.enemyCards;
+    const attackerCard = attackerCards[gameState.rallyState.attackerIndex];
+
+    let attackerSpeedMult = 1.0;
+    if (attackerCard.passive && attackerCard.passive.id === 'SPEED_BOOST') {
+        attackerSpeedMult = 1.3;
+        console.log('[Passive] Origami Speed Boost Active (30%)');
+    }
 
     Object.keys(notesByLane).forEach(laneStr => {
         const lane = parseInt(laneStr);
         const notesInLane = notesByLane[laneStr];
         const laneX = getLaneCenterX(lane);
 
+        // 2. Target Lane Debuff (Rovi)
+        // If Player Attacking -> hitting Enemy Lane -> Check EnemyLaneDebuffs
+        const targetDebuffs = isPlayerAttacker ? gameState.enemyLaneDebuffs : gameState.playerLaneDebuffs;
+        const laneDebuff = targetDebuffs[lane] || 0;
+
+        // Calculate Speed for this lane/batch
+        // Formula: Base * AttackerBonus / (1 + Debuff)
+        const combinedSpeedMult = (RALLY.BASE_SPEED_MULTIPLIER * attackerSpeedMult) / (1 + laneDebuff);
+
+        // Calculate Duration based on Speed
+        // Parry Point is '1 beat' away at Base Speed
+        // duration = BaseDuration / SpeedMult
+        const parryDurationFinal = RALLY.NOTE_DURATION / combinedSpeedMult;
+
+        // Calculate Physical Speed (px/ms)
+        const distanceToParry = Math.abs(parryY - startY);
+        const speedPx = distanceToParry / parryDurationFinal;
+
+        const distanceTotal = Math.abs(endY - startY);
+        const totalDurationFinal = distanceTotal / speedPx;
+
         notesInLane.forEach((_, noteIndex) => {
-            // First note in each lane spawns at t=0
-            // Subsequent notes in same lane spawn with STACKED_NOTE_DELAY
             const delay = noteIndex * RALLY.STACKED_NOTE_DELAY;
 
             setTimeout(() => {
@@ -118,21 +147,23 @@ function scheduleNoteSpawns(isPlayerAttacker, notesByLane) {
                     lane: lane,
                     progress: 0,
                     startTime: Date.now(),
-                    duration: baseDuration,
+                    duration: parryDurationFinal,
+                    totalDuration: totalDurationFinal,
                     startX: laneX,
                     startY: startY,
-                    endX: laneX,  // Same X - vertical movement only
+                    endX: laneX,
                     endY: endY,
+                    parryY: parryY,
                     direction: isPlayerAttacker ? 'toEnemy' : 'toPlayer',
                     bounceCount: 0,
                     resolved: false,
-                    parryAttempted: false
+                    parryAttempted: false,
+                    missedParry: false
                 };
 
                 gameState.activeNotes.push(note);
-                console.log(`[Rally] Spawned note ${note.id} at t=${delay}ms on lane ${lane}`);
+                // console.log(`[Rally] Spawned note ${note.id} at t=${delay}ms on lane ${lane} (Speed: ${combinedSpeedMult.toFixed(2)}x)`);
 
-                // Start animation loop if this is the first note
                 if (gameState.activeNotes.length === 1) {
                     animateNotes();
                 }
@@ -767,11 +798,60 @@ export function finishRallyPhase() {
     // Apply damage based on who got hit
     const hits = gameState.rallyResults.filter(r => r.result === 'HIT');
     hits.forEach(hit => {
-        const targetCards = hit.damagedSide === 'player' ? gameState.playerCards : gameState.enemyCards;
+        const isPlayerHit = hit.damagedSide === 'player';
+        const targetCards = isPlayerHit ? gameState.playerCards : gameState.enemyCards;
         const targetCard = targetCards[hit.lane];
+
         if (targetCard && targetCard.pv > 0) {
             targetCard.pv -= 1;
             if (targetCard.pv < 0) targetCard.pv = 0;
+
+            // --- PASSIVE: ROVI (THORNS) ---
+            if (targetCard.passive && targetCard.passive.id === 'THORNS') {
+                const debuffArr = isPlayerHit ? gameState.playerLaneDebuffs : gameState.enemyLaneDebuffs;
+                debuffArr[hit.lane] += 0.2;
+
+                // Show feedback
+                const x = getLaneCenterX(hit.lane);
+                const y = isPlayerHit ? layout.cardPositions.player[hit.lane].y : layout.cardPositions.enemy[hit.lane].y;
+                showIdentityEffectFeedback({ x, y }, 'THORNS! LANE SLOWED', '#8bc34a');
+                console.log(`[Passive] Rovi Triggered on lane ${hit.lane}. Debuff: ${debuffArr[hit.lane].toFixed(1)}`);
+            }
+        }
+    });
+
+    // --- PASSIVE: SALVATAGGIO (RESURRECT) ---
+    // Check both sides for resurrection opportunities
+    ['player', 'enemy'].forEach(side => {
+        const cards = side === 'player' ? gameState.playerCards : gameState.enemyCards;
+        const passivesUsed = side === 'player' ? gameState.playerPassivesUsed : gameState.enemyPassivesUsed;
+
+        // Find Salvataggio
+        const salvataggioIndex = cards.findIndex(c => c.name === 'Salvataggio');
+        const salvataggio = cards[salvataggioIndex];
+
+        // Check if Salvataggio is viable
+        if (salvataggio && salvataggio.pv > 0 && !passivesUsed[salvataggioIndex]) {
+            // Find a card that is dead (PV <= 0)
+            // Note: In a real game we might want to track if they died *just now*, but for prototype,
+            // reviving any dead card is fine as long as it happens once per battle.
+            const deadCardIndex = cards.findIndex(c => c.pv <= 0);
+
+            if (deadCardIndex !== -1) {
+                // Trigger Revive
+                const deadCard = cards[deadCardIndex];
+                deadCard.pv = 1;
+                passivesUsed[salvataggioIndex] = true;
+
+                // Feedback
+                const pos = side === 'player' ? layout.cardPositions.player[deadCardIndex] : layout.cardPositions.enemy[deadCardIndex];
+                showIdentityEffectFeedback({ x: pos.x + CARD.WIDTH / 2, y: pos.y + CARD.HEIGHT / 2 }, 'RESURRECTED!', '#ffd700');
+                console.log(`[Passive] Salvataggio revived ${deadCard.name} on ${side} side.`);
+
+                // Also show indicator on Salvataggio
+                const salvPos = side === 'player' ? layout.cardPositions.player[salvataggioIndex] : layout.cardPositions.enemy[salvataggioIndex];
+                showIdentityEffectFeedback({ x: salvPos.x + CARD.WIDTH / 2, y: salvPos.y }, 'SAVING GRACE!', '#ffffff');
+            }
         }
     });
 
@@ -806,6 +886,16 @@ export function finishRallyPhase() {
         cleanupRally();
         renderFn();
         return;
+    }
+
+    // Cleanup temporary debuffs for the ATTACKER (since they just used their turn)
+    if (gameState.rallyState) {
+        const attackerSide = gameState.rallyState.attacker;
+        const attackerDebuffs = attackerSide === 'player' ? gameState.playerLaneDebuffs : gameState.enemyLaneDebuffs;
+
+        // Reset all to 0
+        for (let i = 0; i < 4; i++) attackerDebuffs[i] = 0;
+        console.log(`[Rally] Resetting lane debuffs for ${attackerSide}`);
     }
 
     cleanupRally();

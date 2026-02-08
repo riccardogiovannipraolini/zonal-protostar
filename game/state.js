@@ -58,6 +58,12 @@ export function createGameState() {
         enemyMaxStamina: STAMINA.MAX,
         regenAnimation: null,
 
+        // Passive Tracking
+        playerPassivesUsed: {}, // { cardIndex: true }
+        enemyPassivesUsed: {},
+        playerLaneDebuffs: [0, 0, 0, 0], // Speed reduction per lane (e.g., 0.2)
+        enemyLaneDebuffs: [0, 0, 0, 0],
+
         // Cards (deep copy to allow modification)
         playerCards: PLAYER_CARDS.map(c => ({ ...c })),
         enemyCards: ENEMY_CARDS.map(c => ({ ...c })),
