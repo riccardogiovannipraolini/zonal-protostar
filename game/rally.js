@@ -809,12 +809,12 @@ export function finishRallyPhase() {
             // --- PASSIVE: ROVI (THORNS) ---
             if (targetCard.passive && targetCard.passive.id === 'THORNS') {
                 const debuffArr = isPlayerHit ? gameState.playerLaneDebuffs : gameState.enemyLaneDebuffs;
-                debuffArr[hit.lane] += 0.2;
+                debuffArr[hit.lane] += 0.3;
 
                 // Show feedback
                 const x = getLaneCenterX(hit.lane);
                 const y = isPlayerHit ? layout.cardPositions.player[hit.lane].y : layout.cardPositions.enemy[hit.lane].y;
-                showIdentityEffectFeedback({ x, y }, 'THORNS! LANE SLOWED', '#8bc34a');
+                showIdentityEffectFeedback({ x, y }, 'THORNS! NEXT TURN SLOWED', '#8bc34a');
                 console.log(`[Passive] Rovi Triggered on lane ${hit.lane}. Debuff: ${debuffArr[hit.lane].toFixed(1)}`);
             }
         }
