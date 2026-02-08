@@ -2,7 +2,7 @@
 // Enhanced AI with stamina handling, focus fire, and smart targeting
 
 import { AI_CONFIG } from '../data/cards.js';
-import { startRallyPhase } from './rally.js';
+import { startRallyPhase } from './rally/index.js';
 import { isLanePlayable } from './rules.js';
 
 // Module-level references

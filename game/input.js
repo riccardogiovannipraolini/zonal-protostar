@@ -2,7 +2,7 @@
 
 import { CARD } from '../data/cards.js';
 import { getCanvas, layout } from '../render/canvas.js';
-import { attemptParry, startRallyPhase } from './rally.js';
+import { attemptParry, startRallyPhase } from './rally/index.js';
 import { resetGameState } from './state.js';
 import { isLanePlayable } from './rules.js';
 

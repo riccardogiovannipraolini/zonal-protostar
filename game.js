@@ -15,7 +15,7 @@ import { drawNoteDistributionOverlay } from './render/distribution.js';
 import { drawRallyPhase } from './render/rally.js';
 
 // Game logic imports
-import { initRally, finishRallyPhase, getRallyAttacker } from './game/rally.js';
+import { initRally, finishRallyPhase, getRallyAttacker } from './game/rally/index.js';
 import { initAI, aiTurn } from './game/ai.js';
 import { initInput, setupEventListeners } from './game/input.js';
 
@@ -29,13 +29,26 @@ document.addEventListener('DOMContentLoaded', () => {
     // Create game state
     const gameState = createGameState();
 
+    // Batched render system
+    let renderPending = false;
+
+    function requestRender() {
+        if (!renderPending) {
+            renderPending = true;
+            requestAnimationFrame(() => {
+                render();
+                renderPending = false;
+            });
+        }
+    }
+
     // Main render function
     function render() {
         clearCanvas();
         updateCardPositions();
         drawBattlefield();
         drawPhaseIndicator(gameState);
-        drawBattleTimer(gameState);  // Battle timer (MM:SS)
+        drawBattleTimer(gameState);
         drawAllCards(gameState);
         drawStaminaBars(gameState);
         drawRegenAnimation(gameState);
@@ -51,7 +64,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // End turn and switch players
     function endTurn(currentAttacker) {
         gameState.phase = 'END_TURN';
-        render();
+        requestRender();
 
         setTimeout(() => {
             gameState.selectedCard = null;
@@ -114,7 +127,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (newStamina === 0) {
             // Auto-skip turn due to exhaustion
             gameState.phase = 'SELECTION'; // Skip reposition if exhausted? Or allow it? Let's skip to keep it simple.
-            render();
+            requestRender();
 
             showExhaustedMessage(isPlayer);
 
@@ -126,7 +139,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // Normal turn start -> REPOSITION Phase
             gameState.repositionSwapUsed = false;
             gameState.phase = 'REPOSITION';
-            render();
+            requestRender();
 
             if (!isPlayer) {
                 // AI Turn: Reposition -> Selection
@@ -161,30 +174,30 @@ document.addEventListener('DOMContentLoaded', () => {
             if (progress < 1) {
                 floatingText.y = (isPlayer ? canvas.height - 100 : 100) - (progress * 30);
                 floatingText.opacity = 1 - progress;
-                render();
+                requestRender();
                 requestAnimationFrame(animateText);
             } else {
                 gameState.floatingTexts = gameState.floatingTexts.filter(t => t !== floatingText);
-                render();
+                requestRender();
             }
         };
         requestAnimationFrame(animateText);
     }
 
     // Initialize modules with references
-    initRally(gameState, render, endTurn);
-    initAI(gameState, render);
-    initInput(gameState, render, endTurn);
+    initRally(gameState, requestRender, endTurn);
+    initAI(gameState, requestRender);
+    initInput(gameState, requestRender, endTurn);
 
     // Setup event listeners
     setupEventListeners();
 
     // Initial render
-    render();
+    requestRender();
 
     // Expose for debugging
     window.gameState = gameState;
-    window.render = render;
+    window.render = requestRender;
 
     console.log('Game initialized - Modular version');
 });

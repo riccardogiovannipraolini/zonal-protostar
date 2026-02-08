@@ -423,15 +423,23 @@ export function drawRallyPhase(gameState) {
     // Draw lane indicators with QWER labels
     drawLaneIndicators(ctx, canvas, gameState);
 
-    // Handle multiple active notes OR single currentNote (for backwards compatibility)
-    const notes = gameState.activeNotes && gameState.activeNotes.length > 0
-        ? gameState.activeNotes.filter(n => !n.resolved)
-        : (gameState.currentNote ? [gameState.currentNote] : []);
+    // Optimization: Iterate directly instead of filter/map to avoid GC
+    const notes = gameState.activeNotes || [];
+    if (notes.length === 0 && !gameState.currentNote) return;
 
-    if (notes.length === 0) return;
+    // Use currentNote if activeNotes is empty (legacy fallback)
+    const effectiveNotes = notes.length > 0 ? notes : [gameState.currentNote];
 
-    // Get max bounce count for vignette/counter
-    const maxBounce = Math.max(...notes.map(n => n.bounceCount || 0));
+    let maxBounce = 0;
+
+    // First pass: Calculate max bounce (for vignette)
+    for (let i = 0; i < effectiveNotes.length; i++) {
+        const n = effectiveNotes[i];
+        if (!n.resolved) {
+            const b = n.bounceCount || 0;
+            if (b > maxBounce) maxBounce = b;
+        }
+    }
 
     // Draw vignette effect
     if (maxBounce >= 1) {
@@ -441,13 +449,16 @@ export function drawRallyPhase(gameState) {
     // Draw rally counter
     drawRallyCounter(ctx, canvas, maxBounce);
 
-    // Draw all active notes
-    notes.forEach(note => {
-        drawNote(ctx, note);
-
-        // Draw timing indicator for notes with indicators
-        if (note.timingIndicator) {
-            drawTimingIndicator(ctx, gameState, note);
+    // Second pass: Draw notes
+    // We do NOT use forEach to avoid function allocation per frame in tight loops if possible, 
+    // but JS engines are good at this. The main win is avoiding .filter() allocation.
+    for (let i = 0; i < effectiveNotes.length; i++) {
+        const note = effectiveNotes[i];
+        if (!note.resolved) {
+            drawNote(ctx, note);
+            if (note.timingIndicator) {
+                drawTimingIndicator(ctx, gameState, note);
+            }
         }
-    });
+    }
 }

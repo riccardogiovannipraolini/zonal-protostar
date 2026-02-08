@@ -78,7 +78,7 @@ export const ENEMY_CARDS = [
 
 // AI Configuration
 export const AI_CONFIG = {
-    parrySuccessRate: 0.5,       // 50% base chance to successfully parry (reduced from 60%)
+    parrySuccessRate: 0.7,       // 70% base chance to successfully parry (increased from 50%)
     parryPenaltyPerBounce: 0.1,  // -10% per bounce (makes long rallies favor player)
     preferAliveTargets: true,    // Prefer lanes with alive player cards
     focusFireChance: 0.3,        // 30% chance to focus fire on one lane
