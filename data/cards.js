@@ -74,19 +74,7 @@ export const ENEMY_CARDS = [
         passive: { id: 'THORNS', name: 'Effetto sul Campo', description: 'When hit, slows enemy notes in this lane by 30% for the next turn.' }
     }
 ];
-{
-    name: 'Salvataggio', pv: 5, maxPv: 5, na: 1, speed: 2, category: 'SOL', requiredCategory: 'FA',
-        passive: { id: 'RESURRECT', name: 'Capacità di Recupero', description: 'Resurrects the first destroyed ally with 1 PV. (Once per battle)' }
-},
-{
-    name: 'Origami', pv: 2, maxPv: 2, na: 3, speed: 4, category: 'SI', requiredCategory: 'LA',
-        passive: { id: 'SPEED_BOOST', name: 'Potenziamento Offensivo', description: 'Attacks have +20% speed.' }
-},
-{
-    name: 'Rovi', pv: 2, maxPv: 2, na: 5, speed: 5, category: 'RE', requiredCategory: 'SI',
-        passive: { id: 'THORNS', name: 'Effetto sul Campo', description: 'When hit, slows enemy notes in this lane by 20% permanently.' }
-}
-];
+
 
 // AI Configuration
 export const AI_CONFIG = {
