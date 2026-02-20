@@ -81,7 +81,8 @@ export function drawCard(x, y, card, isEnemy, index, gameState) {
     // Card shadow
     ctx.save();
     ctx.shadowColor = isSelected ? 'rgba(255, 234, 0, 0.8)' : isTarget ? 'rgba(255, 0, 0, 0.8)' : 'rgba(0, 0, 0, 0.5)';
-    ctx.shadowBlur = isSelected || isTarget ? 20 : 10;
+    // PERFORMANCE: Reduce shadow blur for performance (selected/target cards)
+    ctx.shadowBlur = isSelected || isTarget ? 10 : 0;
     ctx.shadowOffsetY = isSelected || isTarget ? 0 : 3;
 
     // Card background
@@ -110,27 +111,29 @@ export function drawCard(x, y, card, isEnemy, index, gameState) {
         ctx.strokeStyle = '#00ffff';
         ctx.lineWidth = 4;
         ctx.shadowColor = '#00ffff';
-        ctx.shadowBlur = 25;
+        ctx.shadowBlur = 10;
     } else if (isEnemySelected) {
         ctx.strokeStyle = '#ff8c00';
         ctx.lineWidth = 3;
         ctx.shadowColor = '#ff8c00';
-        ctx.shadowBlur = 15;
+        ctx.shadowBlur = 8;
     } else if (isSelected) {
         ctx.strokeStyle = COLORS.selectedBorder;
         ctx.lineWidth = 3;
+        // PERFORMANCE: Disable extreme shadow blur on selected cards, just keep the border thicker
         ctx.shadowColor = COLORS.selectedBorder;
-        ctx.shadowBlur = 15;
+        ctx.shadowBlur = 8;
     } else if (isTarget) {
         ctx.strokeStyle = '#ff4757';
         ctx.lineWidth = 3;
+        // PERFORMANCE: Reduce target shadow blur
         ctx.shadowColor = '#ff4757';
-        ctx.shadowBlur = 15;
+        ctx.shadowBlur = 8;
     } else {
         ctx.strokeStyle = isDead ? '#666666' : COLORS.cardBorder;
         ctx.lineWidth = 2;
         ctx.shadowColor = isDead ? 'transparent' : COLORS.cardBorder;
-        ctx.shadowBlur = 8;
+        ctx.shadowBlur = 0;
     }
     ctx.beginPath();
     ctx.roundRect(x, y, CARD.WIDTH, CARD.HEIGHT, 8);
@@ -173,8 +176,9 @@ export function drawCard(x, y, card, isEnemy, index, gameState) {
     ctx.fillStyle = isDead ? '#666666' : COLORS.text;
     ctx.font = 'bold 12px "Segoe UI", sans-serif';
     ctx.textAlign = 'center';
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
-    ctx.shadowBlur = 3;
+    // PERFORMANCE: Remove text shadows on card numbers
+    // ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
+    // ctx.shadowBlur = 3;
     ctx.fillText(card.name, x + CARD.WIDTH / 2, y + 22);
     ctx.restore();
 
@@ -222,8 +226,9 @@ export function drawCard(x, y, card, isEnemy, index, gameState) {
         ctx.font = 'bold 30px "Segoe UI", sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.shadowColor = '#000';
-        ctx.shadowBlur = 10;
+        // PERFORMANCE: Remove shadow on skull text
+        // ctx.shadowColor = '#000';
+        // ctx.shadowBlur = 10;
         ctx.fillText('💀', x + CARD.WIDTH / 2, y + CARD.HEIGHT / 2);
         ctx.restore();
     }
@@ -361,7 +366,7 @@ function drawSingleIdentityCard(pos, card, side) {
         ctx.strokeStyle = '#2ecc71'; // Green Glow
         ctx.lineWidth = 3;
         ctx.shadowColor = '#2ecc71';
-        ctx.shadowBlur = 15;
+        ctx.shadowBlur = 8;
     } else if (card.type === 'ACTIVE' && card.currentCooldown === 0 && isPlayer) {
         // Ready to activate
         ctx.fillStyle = isPlayer ? '#2c3e50' : '#8e44ad';
@@ -373,8 +378,9 @@ function drawSingleIdentityCard(pos, card, side) {
         ctx.fillStyle = isPlayer ? '#2c3e50' : '#8e44ad';
         ctx.strokeStyle = isPlayer ? '#3498db' : '#9b59b6';
         ctx.lineWidth = 2;
-        ctx.shadowBlur = 10;
-        ctx.shadowColor = 'rgba(0,0,0,0.5)';
+        // PERFORMANCE: No shadow on static items
+        // ctx.shadowBlur = 10;
+        // ctx.shadowColor = 'rgba(0,0,0,0.5)';
     }
 
     ctx.beginPath();
@@ -470,20 +476,21 @@ export function drawHorizontalLanes(gameState) {
         grad.addColorStop(0.5, '#2ecc71'); // Green
         grad.addColorStop(1, '#3498db');
         ctx.strokeStyle = grad;
-        ctx.shadowColor = '#00ffaa'; // Cyan-ish glow
-        ctx.shadowBlur = 15;
+        // PERFORMANCE: remove high blur
+        // ctx.shadowColor = '#00ffaa'; // Cyan-ish glow
+        // ctx.shadowBlur = 15;
         ctx.setLineDash([]); // Solid
     } else if (hasActiveScudo) {
         // Green Pulse
         ctx.strokeStyle = '#2ecc71';
-        ctx.shadowColor = '#2ecc71';
-        ctx.shadowBlur = 15;
+        // ctx.shadowColor = '#2ecc71';
+        // ctx.shadowBlur = 15;
         ctx.setLineDash([]);
     } else if (hasMetronomo) {
         // Blue Glow
         ctx.strokeStyle = '#3498db';
-        ctx.shadowColor = '#3498db';
-        ctx.shadowBlur = 10;
+        // ctx.shadowColor = '#3498db';
+        // ctx.shadowBlur = 10;
         ctx.setLineDash([]);
     } else {
         // Inactive - Dashed

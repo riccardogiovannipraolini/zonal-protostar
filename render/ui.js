@@ -125,8 +125,9 @@ function drawStaminaBar(x, y, width, height, current, max, side) {
     ctx.font = 'bold 12px "Segoe UI", sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
-    ctx.shadowBlur = 3;
+    // PERFORMANCE: Use simple border/fill instead of text glow
+    // ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
+    // ctx.shadowBlur = 3;
 
     if (isExhausted) {
         // Show actual value even if exhausted if negative
@@ -192,8 +193,9 @@ export function drawRegenAnimation(gameState) {
     ctx.fillStyle = '#ffd700';
     ctx.font = 'bold 18px "Segoe UI", sans-serif';
     ctx.textAlign = 'center';
-    ctx.shadowColor = '#ffd700';
-    ctx.shadowBlur = 10;
+    // PERFORMANCE: Remove text glow on temporary regen animation
+    // ctx.shadowColor = '#ffd700';
+    // ctx.shadowBlur = 10;
     ctx.fillText(`+${gameState.regenAnimation.amount}⚡`, x, y);
     ctx.restore();
 }
@@ -210,8 +212,9 @@ export function drawFloatingTexts(gameState) {
         ctx.fillStyle = t.color;
         ctx.font = 'bold 24px "Segoe UI", sans-serif';
         ctx.textAlign = 'center';
-        ctx.shadowColor = '#000000';
-        ctx.shadowBlur = 10;
+        // PERFORMANCE: Remove complex shadow on floating text
+        // ctx.shadowColor = '#000000';
+        // ctx.shadowBlur = 10;
         ctx.fillText(t.text, t.x, t.y);
         ctx.restore();
     });
@@ -234,8 +237,9 @@ export function drawMessage(gameState) {
     ctx.font = 'bold 32px "Segoe UI", sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.shadowColor = '#000000';
-    ctx.shadowBlur = 10;
+    // PERFORMANCE: Remove message text overlay shadow
+    // ctx.shadowColor = '#000000';
+    // ctx.shadowBlur = 10;
     ctx.fillText(gameState.message.text, canvas.width / 2, canvas.height / 2);
     ctx.restore();
 }
@@ -260,8 +264,9 @@ export function drawGameOverScreen(gameState) {
     ctx.font = 'bold 64px "Segoe UI", sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
-    ctx.shadowBlur = 15;
+    // PERFORMANCE: Avoid blur on massive text rendering
+    // ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
+    // ctx.shadowBlur = 15;
 
     const mainText = isVictory ? '🎉 VICTORY! 🎉' : '💀 DEFEAT 💀';
     ctx.fillText(mainText, canvas.width / 2, canvas.height / 2 - 60);
@@ -281,7 +286,9 @@ export function drawGameOverScreen(gameState) {
 
     // Button background
     ctx.fillStyle = isVictory ? '#27ae60' : '#c0392b';
-    ctx.shadowBlur = 10;
+    ctx.shadowColor = 'rgba(0,0,0,0.5)';
+    // PERFORMANCE: Less button blur
+    ctx.shadowBlur = 5;
     ctx.beginPath();
     ctx.roundRect(buttonX, buttonY, buttonWidth, buttonHeight, 10);
     ctx.fill();
@@ -388,8 +395,9 @@ export function drawTooltip(gameState) {
     ctx.fillStyle = 'rgba(0, 0, 0, 0.9)';
     ctx.strokeStyle = '#ffffff';
     ctx.lineWidth = 1;
-    ctx.shadowColor = 'rgba(0,0,0,0.5)';
-    ctx.shadowBlur = 10;
+    // PERFORMANCE: Turn off text shadow blur
+    // ctx.shadowColor = 'rgba(0,0,0,0.5)';
+    // ctx.shadowBlur = 10;
 
     ctx.beginPath();
     ctx.roundRect(x, y - height / 2, width, height, 4);

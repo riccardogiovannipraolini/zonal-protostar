@@ -138,8 +138,9 @@ function drawRallyCounter(ctx, canvas, bounceCount) {
         color = flash ? '#ff3838' : '#fffa65';
     }
 
-    ctx.shadowColor = color;
-    ctx.shadowBlur = 20 + (bounceCount * 5);
+    // Use a pre-rendered radial glow or simpler shadow
+    // For performance, we disable it if it's too high, or use a semi-transparent stroke instead
+    ctx.shadowBlur = bounceCount >= 5 ? 10 : 5;
 
     ctx.fillStyle = color;
     ctx.font = `bold ${fontSize}px "Segoe UI", sans-serif`;
@@ -186,10 +187,17 @@ function drawNote(ctx, note) {
         ctx.rotate(rotation);
     }
 
-    // Glow
+    // Replaced expensive shadowBlur on animated objects with an inner glow or simpler fill
+    // Outer pseudo-glow using a radial gradient instead of shadowBlur (which calculates every frame)
     const glowRadius = 5 + (bounceCount * 15);
-    ctx.shadowColor = noteColor;
-    ctx.shadowBlur = glowRadius;
+    const radGlow = ctx.createRadialGradient(0, 0, 10, 0, 0, 15 + glowRadius);
+    radGlow.addColorStop(0, noteColor);
+    radGlow.addColorStop(1, 'rgba(0,0,0,0)');
+
+    ctx.fillStyle = radGlow;
+    ctx.beginPath();
+    ctx.arc(0, 0, 15 + glowRadius, 0, Math.PI * 2);
+    ctx.fill();
 
     // Speed lines at high speeds
     if (bounceCount >= 2) {
@@ -228,10 +236,8 @@ function drawNote(ctx, note) {
         ctx.restore();
     }
 
-    // Draw the note circle
+    // Draw the note circle (No shadowBlur to save GPU)
     ctx.fillStyle = noteColor;
-    ctx.shadowColor = noteColor;
-    ctx.shadowBlur = 10;
 
     ctx.beginPath();
     ctx.arc(0, 0, 15, 0, Math.PI * 2);
@@ -351,8 +357,9 @@ function drawTimingIndicator(ctx, gameState, note) {
     ctx.save();
     ctx.strokeStyle = '#2ecc71'; // Green
     ctx.lineWidth = 3;
-    ctx.shadowColor = '#2ecc71';
-    ctx.shadowBlur = 10;
+    // PERFORMANCE: Remove shadowBlur here to avoid 60FPS blur rendering
+    // ctx.shadowColor = '#2ecc71';
+    // ctx.shadowBlur = 10;
 
     ctx.beginPath();
     // Draw Upper Boundary of Perfect
@@ -379,8 +386,9 @@ function drawTimingIndicator(ctx, gameState, note) {
     ctx.save();
     ctx.strokeStyle = '#ffffff';
     ctx.lineWidth = 4;
-    ctx.shadowColor = '#ffffff';
-    ctx.shadowBlur = 5;
+    // PERFORMANCE: Replace shadowBlur with a slight globalAlpha on stroke
+    // ctx.shadowColor = '#ffffff';
+    // ctx.shadowBlur = 5;
 
     // Pulse effect
     const pulse = 1 + Math.sin(Date.now() / 50) * 0.05;
@@ -396,8 +404,9 @@ function drawTimingIndicator(ctx, gameState, note) {
         ctx.fillStyle = '#ffffff';
         ctx.font = 'bold 12px "Segoe UI", sans-serif';
         ctx.textAlign = 'center';
-        ctx.shadowColor = '#000000';
-        ctx.shadowBlur = 5;
+        // PERFORMANCE: No shadow down here
+        // ctx.shadowColor = '#000000';
+        // ctx.shadowBlur = 5;
 
         // Show stamina warning if low
         if (gameState.playerStamina <= 0) {

@@ -53,42 +53,74 @@ export function clearCanvas() {
 }
 
 /**
- * Draw a filled heart shape
+ * Cache for static shapes with expensive properties like shadowBlur
  */
-export function drawHeart(x, y, size) {
-    ctx.save();
-    ctx.fillStyle = COLORS.heart;
-    ctx.shadowColor = '#ff0000';
-    ctx.shadowBlur = 5;
+const shapeCache = new Map();
 
-    ctx.beginPath();
-    ctx.moveTo(x, y + size / 4);
-    ctx.bezierCurveTo(x, y, x - size / 2, y, x - size / 2, y + size / 4);
-    ctx.bezierCurveTo(x - size / 2, y + size / 2, x, y + size * 0.7, x, y + size);
-    ctx.bezierCurveTo(x, y + size * 0.7, x + size / 2, y + size / 2, x + size / 2, y + size / 4);
-    ctx.bezierCurveTo(x + size / 2, y, x, y, x, y + size / 4);
-    ctx.fill();
-
-    ctx.restore();
+function getCachedShape(key, width, height, drawFn) {
+    if (!shapeCache.has(key)) {
+        const offscreen = document.createElement('canvas');
+        offscreen.width = width;
+        offscreen.height = height;
+        const offCtx = offscreen.getContext('2d');
+        drawFn(offCtx, width / 2, height / 2);
+        shapeCache.set(key, offscreen);
+    }
+    return shapeCache.get(key);
 }
 
 /**
- * Draw an empty heart outline
+ * Draw a filled heart shape with shadow from cache to improve performance
+ */
+export function drawHeart(x, y, size) {
+    // We need padding to account for the shadow blur (5 + a little extra)
+    const padding = 15;
+    const cacheSize = size + padding * 2;
+    const cacheKey = `heart_${size}_${COLORS.heart}`;
+
+    const cachedHeart = getCachedShape(cacheKey, cacheSize, cacheSize, (offCtx, cx, cy) => {
+        offCtx.fillStyle = COLORS.heart;
+        offCtx.shadowColor = '#ff0000';
+        offCtx.shadowBlur = 5;
+
+        offCtx.beginPath();
+        offCtx.moveTo(cx, cy - size / 4); // Adjusted for center drawing
+        offCtx.bezierCurveTo(cx, cy - size / 2, cx - size / 2, cy - size / 2, cx - size / 2, cy - size / 4);
+        offCtx.bezierCurveTo(cx - size / 2, cy + size * 0.2, cx, cy + size * 0.45, cx, cy + size * 0.75);
+        offCtx.bezierCurveTo(cx, cy + size * 0.45, cx + size / 2, cy + size * 0.2, cx + size / 2, cy - size / 4);
+        offCtx.bezierCurveTo(cx + size / 2, cy - size / 2, cx, cy - size / 2, cx, cy - size / 4);
+        offCtx.fill();
+    });
+
+    // Draw the cached image centered on the target coordinates
+    ctx.drawImage(cachedHeart, x - cacheSize / 2, (y + size / 4) - cacheSize / 2);
+}
+
+/**
+ * Draw an empty heart outline with shadow from cache to improve performance
  */
 export function drawEmptyHeart(x, y, size) {
-    ctx.save();
-    ctx.strokeStyle = 'rgba(255, 71, 87, 0.4)';
-    ctx.lineWidth = 1;
+    // We need padding to account for the stroke width and potential shadow (even if not used here, for consistency with drawHeart)
+    const padding = 5;
+    const cacheSize = size + padding * 2;
+    const cacheKey = `empty_heart_${size}`;
 
-    ctx.beginPath();
-    ctx.moveTo(x, y + size / 4);
-    ctx.bezierCurveTo(x, y, x - size / 2, y, x - size / 2, y + size / 4);
-    ctx.bezierCurveTo(x - size / 2, y + size / 2, x, y + size * 0.7, x, y + size);
-    ctx.bezierCurveTo(x, y + size * 0.7, x + size / 2, y + size / 2, x + size / 2, y + size / 4);
-    ctx.bezierCurveTo(x + size / 2, y, x, y, x, y + size / 4);
-    ctx.stroke();
+    const cachedHeart = getCachedShape(cacheKey, cacheSize, cacheSize, (offCtx, cx, cy) => {
+        offCtx.strokeStyle = 'rgba(255, 71, 87, 0.4)';
+        offCtx.lineWidth = 1;
 
-    ctx.restore();
+        // No heavy shadow here, but cached anyway so we don't recalculate the bezier curves
+        offCtx.beginPath();
+        offCtx.moveTo(cx, cy - size / 4); // Adjusted for center drawing
+        offCtx.bezierCurveTo(cx, cy - size / 2, cx - size / 2, cy - size / 2, cx - size / 2, cy - size / 4);
+        offCtx.bezierCurveTo(cx - size / 2, cy + size * 0.2, cx, cy + size * 0.45, cx, cy + size * 0.75);
+        offCtx.bezierCurveTo(cx, cy + size * 0.45, cx + size / 2, cy + size * 0.2, cx + size / 2, cy - size / 4);
+        offCtx.bezierCurveTo(cx + size / 2, cy - size / 2, cx, cy - size / 2, cx, cy - size / 4);
+        offCtx.stroke();
+    });
+
+    // Draw the cached image centered on the target coordinates
+    ctx.drawImage(cachedHeart, x - cacheSize / 2, (y + size / 4) - cacheSize / 2);
 }
 
 /**

@@ -65,8 +65,9 @@ export function drawNoteDistributionOverlay(gameState) {
             ctx.fillStyle = hasNote ? 'rgba(155, 89, 182, 0.3)' : 'rgba(255, 255, 255, 0.1)';
             if (isHovered && gameState.assignedNotes.length < maxNotes || (isHovered && hasNote)) {
                 ctx.fillStyle = hasNote ? 'rgba(155, 89, 182, 0.5)' : 'rgba(255, 255, 255, 0.2)';
-                ctx.shadowColor = '#9b59b6';
-                ctx.shadowBlur = 20;
+                // PERFORMANCE: Disable hover shadow to save rendering cost
+                // ctx.shadowColor = '#9b59b6';
+                // ctx.shadowBlur = 20;
             }
         }
         ctx.fillRect(laneX, laneTopY, laneWidth, laneHeight);
@@ -130,8 +131,9 @@ export function drawNoteDistributionOverlay(gameState) {
                 ctx.font = 'bold 40px "Segoe UI", sans-serif';
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
-                ctx.shadowColor = '#9b59b6';
-                ctx.shadowBlur = 15;
+                // PERFORMANCE: Disable blur on static characters
+                // ctx.shadowColor = '#9b59b6';
+                // ctx.shadowBlur = 15;
                 ctx.fillText('♪', 0, 0);
 
                 ctx.restore();
@@ -167,8 +169,9 @@ export function drawNoteDistributionOverlay(gameState) {
     ctx.fillStyle = '#ffffff';
     ctx.font = 'bold 18px "Segoe UI", sans-serif';
     ctx.textAlign = 'center';
-    ctx.shadowColor = '#000000';
-    ctx.shadowBlur = 5;
+    // PERFORMANCE: Remove button shadow computation per frame
+    // ctx.shadowColor = '#000000';
+    // ctx.shadowBlur = 5;
     ctx.fillText(`Notes: ${gameState.assignedNotes.length}/${maxNotes}`, canvas.width / 2, laneTopY - 40);
 
     // Stamina warning
@@ -189,8 +192,9 @@ export function drawNoteDistributionOverlay(gameState) {
     const cancelX = canvas.width / 2 - buttonWidth - buttonSpacing / 2;
     ctx.save();
     ctx.fillStyle = '#e74c3c';
-    ctx.shadowColor = '#e74c3c';
-    ctx.shadowBlur = 10;
+    // PERFORMANCE: Use lighter shadow for buttons
+    // ctx.shadowColor = '#e74c3c';
+    // ctx.shadowBlur = 10;
     ctx.beginPath();
     ctx.roundRect(cancelX, buttonY, buttonWidth, buttonHeight, 8);
     ctx.fill();
@@ -206,8 +210,9 @@ export function drawNoteDistributionOverlay(gameState) {
         const confirmX = canvas.width / 2 + buttonSpacing / 2;
         ctx.save();
         ctx.fillStyle = '#2ecc71';
-        ctx.shadowColor = '#2ecc71';
-        ctx.shadowBlur = 10;
+        // PERFORMANCE: Use lighter shadow for buttons
+        // ctx.shadowColor = '#2ecc71';
+        // ctx.shadowBlur = 10;
         ctx.beginPath();
         ctx.roundRect(confirmX, buttonY, buttonWidth, buttonHeight, 8);
         ctx.fill();
