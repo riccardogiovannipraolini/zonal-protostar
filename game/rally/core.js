@@ -10,14 +10,16 @@ import { stopBackgroundMusic } from '../audio.js';
 // Module-level references (set by init)
 let gameState = null;
 let renderFn = null;
+let directRenderFn = null;
 let endTurnFn = null;
 
 /**
  * Initialize rally module with game state reference
  */
-export function initRally(state, render, endTurn) {
+export function initRally(state, render, directRender, endTurn) {
     gameState = state;
     renderFn = render;
+    directRenderFn = directRender;
     endTurnFn = endTurn;
 }
 
@@ -70,7 +72,8 @@ export function startRallyPhase(attacker, attackerIndex) {
  * Wrapper to start animation loop with dependencies
  */
 function startAnimationLoop() {
-    animateNotes(gameState, renderFn, checkRallyComplete, scheduleAIParryForNote);
+    // Pass directRenderFn instead of requestRender to avoid recursive decoupled painting loop
+    animateNotes(gameState, directRenderFn, checkRallyComplete, scheduleAIParryForNote);
 }
 
 /**

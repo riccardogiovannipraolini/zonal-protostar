@@ -1,7 +1,7 @@
 // ===== INPUT HANDLING =====
 
 import { CARD } from '../data/cards.js';
-import { getCanvas, layout } from '../render/canvas.js';
+import { getCanvas, layout, invalidateLayout } from '../render/canvas.js';
 import { attemptParry, startRallyPhase } from './rally/index.js';
 import { resetGameState } from './state.js';
 import { isLanePlayable } from './rules.js';
@@ -442,6 +442,7 @@ function handleRepositionClick(x, y) {
 
                 gameState.selectedCard = null;
                 gameState.repositionSwapUsed = true;
+                invalidateLayout(); // Recompute layout for new positions
 
                 // Auto-advance to Selection phase after swap
                 setTimeout(() => {

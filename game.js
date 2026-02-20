@@ -8,7 +8,7 @@ import { STAMINA } from './data/cards.js';
 import { createGameState, resetGameState } from './game/state.js';
 
 // Render imports
-import { initCanvas, clearCanvas, updateCardPositions, getCanvas } from './render/canvas.js';
+import { initCanvas, clearCanvas, updateCardPositions, getCanvas, invalidateLayout } from './render/canvas.js';
 import { drawBattlefield, drawAllCards } from './render/cards.js';
 import { drawPhaseIndicator, drawStaminaBars, drawRegenAnimation, drawFloatingTexts, drawMessage, drawGameOverScreen, drawBattleTimer, drawRepositionUI, drawTooltip } from './render/ui.js';
 import { drawNoteDistributionOverlay } from './render/distribution.js';
@@ -28,6 +28,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Create game state
     const gameState = createGameState();
+
+    // Invalidate layout once on load to ensure initial setup
+    invalidateLayout();
 
     // Batched render system
     let renderPending = false;
@@ -185,7 +188,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Initialize modules with references
-    initRally(gameState, requestRender, endTurn);
+    // Note: initRally receives both requestRender and direct render to use in different contexts
+    initRally(gameState, requestRender, render, endTurn);
     initAI(gameState, requestRender);
     initInput(gameState, requestRender, endTurn);
 

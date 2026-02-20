@@ -12,6 +12,15 @@ import { handleNoteImpact } from './note.js';
 // Actually 'scheduleAIParryForNote' is reaction logic. It belongs in a 'parry.js' or 'ai-reaction.js'.
 // But 'animateNotes' calls it.
 
+// Helper to check intersection
+function checkCrossed(y, prevY, newY, direction) {
+    if (direction === 'toEnemy') {
+        return prevY >= y && newY <= y;
+    } else {
+        return prevY <= y && newY >= y;
+    }
+}
+
 /**
  * Animate all active notes using requestAnimationFrame
  */
@@ -41,15 +50,6 @@ export function animateNotes(gameState, renderFn, checkRallyCompleteFn, schedule
         const newY = note.startY + (note.endY - note.startY) * progress;
 
         // CHECK IDENTITY CARD INTERSECTION (Single Lane at 50%)
-
-        // Helper to check intersection
-        const checkCrossed = (y, prevY, newY, direction) => {
-            if (direction === 'toEnemy') {
-                return prevY >= y && newY <= y;
-            } else {
-                return prevY <= y && newY >= y;
-            }
-        };
 
         // Check Single Lane Intersection
         if (!note.identityEffectApplied && checkCrossed(identityLaneY, previousY, newY, note.direction)) {

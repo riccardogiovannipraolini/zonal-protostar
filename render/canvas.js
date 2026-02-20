@@ -15,6 +15,12 @@ export const layout = {
     lanePositions: []
 };
 
+let layoutDirty = true; // global flag to prevent GC thrashing
+
+export function invalidateLayout() {
+    layoutDirty = true;
+}
+
 /**
  * Initialize canvas and compute layout
  */
@@ -98,6 +104,9 @@ export function getCardPosition(side, index) {
  * Update stored card positions (called during render)
  */
 export function updateCardPositions() {
+    if (!layoutDirty) return; // skip if layout hasn't changed
+    layoutDirty = false;
+
     layout.cardPositions.player = [];
     layout.cardPositions.enemy = [];
 
