@@ -189,6 +189,17 @@ document.addEventListener('DOMContentLoaded', () => {
     initAI(gameState, requestRender);
     initInput(gameState, requestRender, endTurn);
 
+    // Setup background music to play on first interaction
+    const startAudio = () => {
+        import('./game/audio.js').then(module => {
+            module.playBackgroundMusic();
+        });
+        document.removeEventListener('click', startAudio);
+        document.removeEventListener('keydown', startAudio);
+    };
+    document.addEventListener('click', startAudio);
+    document.addEventListener('keydown', startAudio);
+
     // Setup event listeners
     setupEventListeners();
 

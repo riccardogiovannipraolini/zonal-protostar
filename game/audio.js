@@ -8,6 +8,8 @@ let tensionGain = null;
 /**
  * Initialize audio context (call on first user interaction)
  */
+let bgmAudio = null;
+
 export function initAudio() {
     if (audioContext) return;
 
@@ -16,6 +18,34 @@ export function initAudio() {
         console.log('[Audio] AudioContext initialized');
     } catch (e) {
         console.warn('[Audio] Web Audio API not supported:', e);
+    }
+}
+
+/**
+ * Play background music continuously
+ */
+export function playBackgroundMusic() {
+    if (!bgmAudio) {
+        bgmAudio = new Audio('assets/music/COMBATTIMENTO_Base.mp3');
+        bgmAudio.loop = true;
+        bgmAudio.volume = 0.5; // Adjust volume if necessary
+    }
+
+    // Play only if it's paused or stopped
+    if (bgmAudio.paused) {
+        bgmAudio.play().catch(e => {
+            console.warn('[Audio] Could not auto-play background music. Waiting for interaction.', e);
+        });
+    }
+}
+
+/**
+ * Stop background music
+ */
+export function stopBackgroundMusic() {
+    if (bgmAudio) {
+        bgmAudio.pause();
+        bgmAudio.currentTime = 0; // Reset to start
     }
 }
 
