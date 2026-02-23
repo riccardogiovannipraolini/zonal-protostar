@@ -49,6 +49,33 @@ export function stopBackgroundMusic() {
     }
 }
 
+let victoryAudio = null;
+let defeatAudio = null;
+
+/**
+ * Play victory music
+ */
+export function playVictoryMusic() {
+    stopBackgroundMusic();
+    if (!victoryAudio) {
+        victoryAudio = new Audio('assets/music/VITTORIA 1 PROVA.mp3');
+        victoryAudio.volume = 0.5;
+    }
+    victoryAudio.play().catch(e => console.warn('[Audio] Could not auto-play victory music.', e));
+}
+
+/**
+ * Play defeat music
+ */
+export function playDefeatMusic() {
+    stopBackgroundMusic();
+    if (!defeatAudio) {
+        defeatAudio = new Audio('assets/music/SCONFITTA 1 PROVA.mp3');
+        defeatAudio.volume = 0.5;
+    }
+    defeatAudio.play().catch(e => console.warn('[Audio] Could not auto-play defeat music.', e));
+}
+
 /**
  * Play parry sound with pitch based on bounce count
  */

@@ -5,7 +5,7 @@ import { showImpactFeedback, showStaminaChange, showIdentityEffectFeedback } fro
 import { scheduleNoteSpawns, handleNoteImpact } from './note.js';
 import { animateNotes, triggerSpinAnimation, bounceNote } from './animation.js';
 import { scheduleAIParryForNote as scheduleAIParryImpl, attemptParryLogic as attemptParryImpl } from './parry.js';
-import { stopBackgroundMusic } from '../audio.js';
+import { stopBackgroundMusic, playVictoryMusic, playDefeatMusic } from '../audio.js';
 
 // Module-level references (set by init)
 let gameState = null;
@@ -190,7 +190,7 @@ export function finishRallyPhase() {
         gameState.phase = 'GAME_OVER';
         gameState.gameOver = { winner: 'player', reason: 'All enemy cards destroyed!' };
         logBattleDuration();
-        stopBackgroundMusic();
+        playVictoryMusic();
         cleanupRally();
         renderFn();
         return;
@@ -200,7 +200,7 @@ export function finishRallyPhase() {
         gameState.phase = 'GAME_OVER';
         gameState.gameOver = { winner: 'enemy', reason: 'All your cards destroyed!' };
         logBattleDuration();
-        stopBackgroundMusic();
+        playDefeatMusic();
         cleanupRally();
         renderFn();
         return;
