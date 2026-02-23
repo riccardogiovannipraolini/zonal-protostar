@@ -18,6 +18,7 @@ import { drawRallyPhase } from './render/rally.js';
 import { initRally, finishRallyPhase, getRallyAttacker } from './game/rally/index.js';
 import { initAI, aiTurn } from './game/ai.js';
 import { initInput, setupEventListeners } from './game/input.js';
+import { initAudio, playBackgroundMusic, stopAllAudio } from './game/audio.js';
 
 // ===== INITIALIZATION =====
 
@@ -195,9 +196,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Setup background music to play on first interaction
     const startAudio = () => {
-        import('./game/audio.js').then(module => {
-            module.playBackgroundMusic();
-        });
+        initAudio();
+        playBackgroundMusic();
         document.removeEventListener('click', startAudio);
         document.removeEventListener('keydown', startAudio);
     };

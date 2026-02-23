@@ -2,6 +2,7 @@
 
 import { PLAYER_CARDS, ENEMY_CARDS, STAMINA, IDENTITY_CARDS } from '../data/cards.js';
 import { calculateChordBonuses } from './chords.js';
+import { stopAllAudio, playBackgroundMusic } from './audio.js';
 
 /**
  * Create a fresh game state
@@ -202,4 +203,8 @@ export function resetGameState(state) {
 
     // Reset battle timer
     state.battleStartTime = Date.now();
+
+    // Reset audio: stop victory/defeat music, restart BGM
+    stopAllAudio();
+    playBackgroundMusic();
 }

@@ -1,15 +1,70 @@
-// ===== AUDIO MODULE FOR RALLY SOUNDS =====
-// Uses Web Audio API for synthesized game sounds
+// ===== AUDIO MODULE =====
+// Handles background music, victory/defeat music, and SFX using HTML5 Audio
 
+// ---- MUSIC ----
+let bgmAudio = null;
+let victoryAudio = null;
+let defeatAudio = null;
+
+// ---- SFX (pre-loaded for instant playback) ----
+let sfxParryNormal = null;
+let sfxParryPerfect = null;
+let sfxParryMiss = null;
+
+// ---- Web Audio API (for tension loop only) ----
 let audioContext = null;
 let tensionOscillator = null;
 let tensionGain = null;
 
 /**
- * Initialize audio context (call on first user interaction)
+ * Pre-load all audio assets. Call once on init or first interaction.
  */
-let bgmAudio = null;
+function preloadAudio() {
+    // Background music
+    if (!bgmAudio) {
+        bgmAudio = new Audio('assets/music/COMBATTIMENTO_Base.mp3');
+        bgmAudio.loop = true;
+        bgmAudio.volume = 0.5;
+        bgmAudio.preload = 'auto';
+    }
 
+    // Victory music
+    if (!victoryAudio) {
+        victoryAudio = new Audio('assets/music/VITTORIA 1 PROVA.mp3');
+        victoryAudio.volume = 0.6;
+        victoryAudio.preload = 'auto';
+    }
+
+    // Defeat music
+    if (!defeatAudio) {
+        defeatAudio = new Audio('assets/music/SCONFITTA 1 PROVA.mp3');
+        defeatAudio.volume = 0.6;
+        defeatAudio.preload = 'auto';
+    }
+
+    // SFX
+    if (!sfxParryNormal) {
+        sfxParryNormal = new Audio('assets/SFX/parata normale.wav');
+        sfxParryNormal.volume = 0.7;
+        sfxParryNormal.preload = 'auto';
+    }
+
+    if (!sfxParryPerfect) {
+        sfxParryPerfect = new Audio('assets/SFX/Parata perfetta 1.wav');
+        sfxParryPerfect.volume = 0.7;
+        sfxParryPerfect.preload = 'auto';
+    }
+
+    if (!sfxParryMiss) {
+        sfxParryMiss = new Audio('assets/SFX/parata mancata.wav');
+        sfxParryMiss.volume = 0.7;
+        sfxParryMiss.preload = 'auto';
+    }
+}
+
+/**
+ * Initialize audio context for Web Audio API (tension loop)
+ */
 export function initAudio() {
     if (audioContext) return;
 
@@ -19,23 +74,27 @@ export function initAudio() {
     } catch (e) {
         console.warn('[Audio] Web Audio API not supported:', e);
     }
+
+    // Pre-load all audio files
+    preloadAudio();
 }
+
+// =========================================
+// BACKGROUND MUSIC
+// =========================================
 
 /**
  * Play background music continuously
  */
 export function playBackgroundMusic() {
-    if (!bgmAudio) {
-        bgmAudio = new Audio('assets/music/COMBATTIMENTO_Base.mp3');
-        bgmAudio.loop = true;
-        bgmAudio.volume = 0.5; // Adjust volume if necessary
-    }
+    preloadAudio();
 
-    // Play only if it's paused or stopped
     if (bgmAudio.paused) {
+        bgmAudio.currentTime = 0;
         bgmAudio.play().catch(e => {
-            console.warn('[Audio] Could not auto-play background music. Waiting for interaction.', e);
+            console.warn('[Audio] Could not auto-play background music:', e);
         });
+        console.log('[Audio] Background music started');
     }
 }
 
@@ -45,99 +104,93 @@ export function playBackgroundMusic() {
 export function stopBackgroundMusic() {
     if (bgmAudio) {
         bgmAudio.pause();
-        bgmAudio.currentTime = 0; // Reset to start
+        bgmAudio.currentTime = 0;
     }
 }
 
-let victoryAudio = null;
-let defeatAudio = null;
+// =========================================
+// VICTORY / DEFEAT MUSIC
+// =========================================
 
 /**
- * Play victory music
+ * Play victory music (stops BGM first)
  */
 export function playVictoryMusic() {
     stopBackgroundMusic();
-    if (!victoryAudio) {
-        victoryAudio = new Audio('assets/music/VITTORIA 1 PROVA.mp3');
-        victoryAudio.volume = 0.5;
-    }
-    victoryAudio.play().catch(e => console.warn('[Audio] Could not auto-play victory music.', e));
+    preloadAudio();
+
+    victoryAudio.currentTime = 0;
+    victoryAudio.play().catch(e => {
+        console.warn('[Audio] Could not play victory music:', e);
+    });
+    console.log('[Audio] Victory music playing');
 }
 
 /**
- * Play defeat music
+ * Play defeat music (stops BGM first)
  */
 export function playDefeatMusic() {
     stopBackgroundMusic();
-    if (!defeatAudio) {
-        defeatAudio = new Audio('assets/music/SCONFITTA 1 PROVA.mp3');
-        defeatAudio.volume = 0.5;
-    }
-    defeatAudio.play().catch(e => console.warn('[Audio] Could not auto-play defeat music.', e));
+    preloadAudio();
+
+    defeatAudio.currentTime = 0;
+    defeatAudio.play().catch(e => {
+        console.warn('[Audio] Could not play defeat music:', e);
+    });
+    console.log('[Audio] Defeat music playing');
+}
+
+// =========================================
+// SFX - PARRY SOUNDS (using real audio files)
+// =========================================
+
+/**
+ * Helper: play an SFX by cloning the audio node (allows overlapping playback)
+ */
+function playSFX(audioElement) {
+    if (!audioElement) return;
+    // Clone so that multiple SFX can overlap without cutting each other off
+    const clone = audioElement.cloneNode();
+    clone.volume = audioElement.volume;
+    clone.play().catch(e => {
+        console.warn('[Audio] SFX playback failed:', e);
+    });
 }
 
 /**
- * Play parry sound with pitch based on bounce count
+ * Play normal parry sound (GOOD / imperfect parry)
  */
 export function playParrySound(bounceCount = 0) {
-    if (!audioContext) initAudio();
-    if (!audioContext) return;
-
-    const oscillator = audioContext.createOscillator();
-    const gainNode = audioContext.createGain();
-
-    // Base frequency increases with each bounce (pitch up)
-    const baseFrequency = 400;
-    const frequencyMultiplier = 1 + (bounceCount * 0.15);
-    oscillator.frequency.setValueAtTime(baseFrequency * frequencyMultiplier, audioContext.currentTime);
-    oscillator.type = 'sine';
-
-    // Quick attack and decay
-    gainNode.gain.setValueAtTime(0, audioContext.currentTime);
-    gainNode.gain.linearRampToValueAtTime(0.3, audioContext.currentTime + 0.02);
-    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.15);
-
-    oscillator.connect(gainNode);
-    gainNode.connect(audioContext.destination);
-
-    oscillator.start(audioContext.currentTime);
-    oscillator.stop(audioContext.currentTime + 0.15);
+    preloadAudio();
+    console.log('[Audio] Playing SFX: parata normale.wav');
+    playSFX(sfxParryNormal);
 }
 
 /**
- * Play hit/slam sound when someone misses
+ * Play perfect parry sound
+ */
+export function playPerfectParrySound() {
+    preloadAudio();
+    console.log('[Audio] Playing SFX: Parata perfetta 1.wav');
+    playSFX(sfxParryPerfect);
+}
+
+/**
+ * Play hit/miss sound (parata mancata / damage)
  */
 export function playHitSound() {
-    if (!audioContext) initAudio();
-    if (!audioContext) return;
-
-    const oscillator = audioContext.createOscillator();
-    const gainNode = audioContext.createGain();
-
-    // Low frequency for impact
-    oscillator.frequency.setValueAtTime(80, audioContext.currentTime);
-    oscillator.frequency.exponentialRampToValueAtTime(40, audioContext.currentTime + 0.2);
-    oscillator.type = 'sawtooth';
-
-    // Punchy attack
-    gainNode.gain.setValueAtTime(0.4, audioContext.currentTime);
-    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.25);
-
-    oscillator.connect(gainNode);
-    gainNode.connect(audioContext.destination);
-
-    oscillator.start(audioContext.currentTime);
-    oscillator.stop(audioContext.currentTime + 0.3);
+    preloadAudio();
+    console.log('[Audio] Playing SFX: parata mancata.wav');
+    playSFX(sfxParryMiss);
 }
 
 /**
- * Play stalemate sound
+ * Play stalemate sound (keep synthesized for now, as no file provided)
  */
 export function playStalemateSound() {
     if (!audioContext) initAudio();
     if (!audioContext) return;
 
-    // Two-tone resolution sound
     const osc1 = audioContext.createOscillator();
     const osc2 = audioContext.createOscillator();
     const gainNode = audioContext.createGain();
@@ -161,6 +214,10 @@ export function playStalemateSound() {
     osc2.stop(audioContext.currentTime + 0.6);
 }
 
+// =========================================
+// TENSION LOOP (Web Audio API - synthesized)
+// =========================================
+
 /**
  * Start tension loop for long rallies
  */
@@ -173,12 +230,10 @@ export function startTensionLoop(bounceCount) {
     tensionOscillator = audioContext.createOscillator();
     tensionGain = audioContext.createGain();
 
-    // Low rumbling frequency that increases with bounces
     const baseFreq = 60 + (bounceCount * 10);
     tensionOscillator.frequency.setValueAtTime(baseFreq, audioContext.currentTime);
     tensionOscillator.type = 'triangle';
 
-    // Subtle volume
     const volume = Math.min(0.1, 0.03 + (bounceCount * 0.02));
     tensionGain.gain.setValueAtTime(0, audioContext.currentTime);
     tensionGain.gain.linearRampToValueAtTime(volume, audioContext.currentTime + 0.2);
@@ -203,5 +258,22 @@ export function stopTensionLoop() {
     }
     if (tensionGain) {
         tensionGain = null;
+    }
+}
+
+/**
+ * Stop ALL audio (useful for game reset)
+ */
+export function stopAllAudio() {
+    stopBackgroundMusic();
+    stopTensionLoop();
+
+    if (victoryAudio) {
+        victoryAudio.pause();
+        victoryAudio.currentTime = 0;
+    }
+    if (defeatAudio) {
+        defeatAudio.pause();
+        defeatAudio.currentTime = 0;
     }
 }

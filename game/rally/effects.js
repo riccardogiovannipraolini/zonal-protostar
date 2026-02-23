@@ -1,5 +1,5 @@
 import { getCanvas } from '../../render/canvas.js';
-import { playParrySound, playHitSound, playStalemateSound, stopTensionLoop } from '../audio.js';
+import { playParrySound, playPerfectParrySound, playHitSound, playStalemateSound, stopTensionLoop } from '../audio.js';
 import { getLaneCenterX } from './utils.js';
 import { layout } from '../../render/canvas.js';
 import { CARD } from '../../data/cards.js'; // Need these for thorns/resurrect feedback positions if used here
@@ -15,19 +15,19 @@ export function showImpactFeedback(gameState, result, note, renderFn) {
     if (result === 'PERFECT') {
         text = 'PERFECT!';
         color = '#2ecc71'; // Green
-        playParrySound(note.bounceCount || 0);
+        playPerfectParrySound();
     } else if (result === 'GOOD') {
         text = 'GOOD';
         color = '#f1c40f'; // Yellow
-        playParrySound(note.bounceCount || 0);
+        playParrySound();
     } else if (result === 'RETURN') {
         text = '↩ RETURN!';
         color = '#f1c40f';
-        playParrySound(note.bounceCount || 0);
+        playParrySound();
     } else if (result === 'PARRY') {
         text = 'PARRY!';
         color = '#2ecc71';
-        playParrySound(note.bounceCount || 0);
+        playPerfectParrySound();
     } else if (result === 'STALEMATE') {
         text = '⚡ STALEMATE ⚡';
         color = '#9b59b6';
