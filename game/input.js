@@ -5,6 +5,7 @@ import { getCanvas, layout, invalidateLayout } from '../render/canvas.js';
 import { attemptParry, startRallyPhase } from './rally/index.js';
 import { resetGameState } from './state.js';
 import { isLanePlayable } from './rules.js';
+import { playNoteAssignSound, playRallyLaunchSound } from './audio.js';
 
 // Module-level references
 let gameState = null;
@@ -195,6 +196,7 @@ function handleDistributionClick(x, y) {
 
             if (gameState.assignedNotes.length < maxNotes) {
                 gameState.assignedNotes.push(i);
+                playNoteAssignSound();
             } else if (notesInLane > 0) {
                 const indexToRemove = gameState.assignedNotes.indexOf(i);
                 if (indexToRemove !== -1) {
@@ -250,6 +252,9 @@ function scheduleAutoLaunch() {
     autoLaunchTimer = setTimeout(() => {
         autoLaunchTimer = null;
         if (gameState.phase !== 'DISTRIBUTION' || gameState.assignedNotes.length === 0) return;
+
+        // Launch confirmation SFX
+        playRallyLaunchSound();
 
         // Launch rally
         gameState.playerStamina -= gameState.assignedNotes.length * STAMINA.COST_PER_NOTE;
@@ -315,6 +320,7 @@ function handleKeyDown(event) {
 
         if (gameState.assignedNotes.length < maxNotes) {
             gameState.assignedNotes.push(lane);
+            playNoteAssignSound();
             // Visual flash
             gameState.laneFlash = { lane, startTime: Date.now() };
             renderFn();

@@ -10,6 +10,8 @@ let defeatAudio = null;
 let sfxParryNormal = null;
 let sfxParryPerfect = null;
 let sfxParryMiss = null;
+let sfxNoteAssign = null;
+let sfxRallyLaunch = null;
 
 // ---- Web Audio API (for tension loop only) ----
 let audioContext = null;
@@ -22,7 +24,7 @@ let tensionGain = null;
 function preloadAudio() {
     // Background music
     if (!bgmAudio) {
-        bgmAudio = new Audio('assets/music/COMBATTIMENTO_Base.mp3');
+        bgmAudio = new Audio('assets/music/COMBATTIMENTO_BOSS 1.mp3');
         bgmAudio.loop = true;
         bgmAudio.volume = 0.5;
         bgmAudio.preload = 'auto';
@@ -59,6 +61,18 @@ function preloadAudio() {
         sfxParryMiss = new Audio('assets/SFX/parata mancata.wav');
         sfxParryMiss.volume = 0.7;
         sfxParryMiss.preload = 'auto';
+    }
+
+    if (!sfxNoteAssign) {
+        sfxNoteAssign = new Audio('assets/SFX/SFX_UI_Combat_Input_menu.wav');
+        sfxNoteAssign.volume = 0.7;
+        sfxNoteAssign.preload = 'auto';
+    }
+
+    if (!sfxRallyLaunch) {
+        sfxRallyLaunch = new Audio('assets/SFX/SFX_UI_Combat_Input_select_ok.wav');
+        sfxRallyLaunch.volume = 0.8;
+        sfxRallyLaunch.preload = 'auto';
     }
 }
 
@@ -182,6 +196,22 @@ export function playHitSound() {
     preloadAudio();
     console.log('[Audio] Playing SFX: parata mancata.wav');
     playSFX(sfxParryMiss);
+}
+
+/**
+ * Play note assignment click (during distribution phase)
+ */
+export function playNoteAssignSound() {
+    preloadAudio();
+    playSFX(sfxNoteAssign);
+}
+
+/**
+ * Play rally launch confirmation sound
+ */
+export function playRallyLaunchSound() {
+    preloadAudio();
+    playSFX(sfxRallyLaunch);
 }
 
 /**
