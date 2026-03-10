@@ -140,9 +140,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 endTurn(side);
             }, 1200);
         } else {
-            // Normal turn start -> REPOSITION Phase
-            gameState.repositionSwapUsed = false;
-            gameState.phase = 'REPOSITION';
+            // Normal turn start -> Check if reposition is possible
+            const aliveCardsCount = (isPlayer ? gameState.playerCards : gameState.enemyCards).filter(c => c.pv > 0).length;
+
+            if (aliveCardsCount < 2) {
+                console.log(`[Turn] Only ${aliveCardsCount} card alive, skipping REPOSITION phase`);
+                gameState.phase = 'SELECTION';
+            } else {
+                gameState.repositionSwapUsed = false;
+                gameState.phase = 'REPOSITION';
+            }
+            
             requestRender();
 
             if (!isPlayer) {

@@ -85,12 +85,12 @@ function triggerShake(gameState, note, renderFn) {
         gameState.shakeInterval = null;
     }
 
-    const defenderSide = gameState.rallyState.currentDefender;
+    const damagedSide = note.direction === 'toPlayer' ? 'player' : 'enemy';
     const bounceCount = note.bounceCount || 0;
     const maxShakeFrames = 10 + (bounceCount * 2);
 
     gameState.shakeCard = {
-        side: defenderSide,
+        side: damagedSide,
         index: note.lane,
         frames: 0,
         intensity: 1 + (bounceCount * 0.3)

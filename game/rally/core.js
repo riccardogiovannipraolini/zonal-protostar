@@ -5,7 +5,7 @@ import { showImpactFeedback, showStaminaChange, showIdentityEffectFeedback } fro
 import { scheduleNoteSpawns, handleNoteImpact } from './note.js';
 import { animateNotes, triggerSpinAnimation, bounceNote } from './animation.js';
 import { scheduleAIParryForNote as scheduleAIParryImpl, attemptParryLogic as attemptParryImpl } from './parry.js';
-import { stopBackgroundMusic, playVictoryMusic, playDefeatMusic } from '../audio.js';
+import { stopBackgroundMusic, playVictoryMusic, playDefeatMusic, playNoteLaunchSFX } from '../audio.js';
 
 // Module-level references (set by init)
 let gameState = null;
@@ -63,6 +63,13 @@ export function startRallyPhase(attacker, attackerIndex) {
     gameState.activeNotes = []; // Multiple notes can be active at once
     gameState.rallyResults = [];
     gameState.phase = 'RALLY';
+
+    // Play card-specific launch SFX
+    const attackerCards = isPlayerAttacker ? gameState.playerCards : gameState.enemyCards;
+    const attackerCard = attackerCards[attackerIndex];
+    if (attackerCard && attackerCard.category) {
+        playNoteLaunchSFX(attackerCard.category);
+    }
 
     // Schedule all note spawns
     scheduleNoteSpawns(gameState, isPlayerAttacker, notesByLane, startAnimationLoop);
@@ -163,6 +170,13 @@ export function finishRallyPhase() {
                 const pos = side === 'player' ? layout.cardPositions.player[deadCardIndex] : layout.cardPositions.enemy[deadCardIndex];
                 showIdentityEffectFeedback(gameState, { x: pos.x + CARD.WIDTH / 2, y: pos.y + CARD.HEIGHT / 2 }, 'RESURRECTED!', '#ffd700', renderFn);
                 console.log(`[Passive] Salvataggio revived ${deadCard.name} on ${side} side.`);
+
+                // Golden flash on resurrected card
+                gameState.resurrectFlash = {
+                    cardIndex: deadCardIndex,
+                    side: side,
+                    startTime: Date.now()
+                };
 
                 // Also show indicator on Salvataggio
                 const salvPos = side === 'player' ? layout.cardPositions.player[salvataggioIndex] : layout.cardPositions.enemy[salvataggioIndex];

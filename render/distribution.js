@@ -1,6 +1,6 @@
 // ===== DISTRIBUTION OVERLAY RENDERING =====
 
-import { CARD } from '../data/cards.js';
+import { CARD, STAMINA } from '../data/cards.js';
 import { getCtx, getCanvas, layout } from './canvas.js';
 
 import { isLanePlayable } from '../game/rules.js';
@@ -24,7 +24,7 @@ export function drawNoteDistributionOverlay(gameState) {
     const playableLanesCount = [0, 1, 2, 3].filter(i => isLanePlayable(gameState, i)).length;
 
     // Allow stacking notes
-    const maxNotes = Math.min(selectedCard.na, gameState.playerStamina);
+    const maxNotes = Math.min(selectedCard.na, Math.floor(gameState.playerStamina / STAMINA.COST_PER_NOTE));
     const cardMaxNotes = selectedCard.na;
 
     // Semi-transparent overlay
@@ -89,12 +89,17 @@ export function drawNoteDistributionOverlay(gameState) {
         ctx.strokeRect(laneX, laneTopY, laneWidth, laneHeight);
         ctx.restore();
 
-        // Lane number
+        // Lane number + QWER key hint
+        const qwerLabels = ['Q', 'W', 'E', 'R'];
         ctx.save();
         ctx.fillStyle = isDisabled ? 'rgba(100, 100, 100, 0.3)' : 'rgba(255, 255, 255, 0.6)';
         ctx.font = 'bold 14px "Segoe UI", sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText(`Lane ${i + 1}`, laneX + laneWidth / 2, laneTopY - 10);
+        ctx.fillText(`Lane ${i + 1}`, laneX + laneWidth / 2, laneTopY - 18);
+        // QWER hint
+        ctx.fillStyle = isDisabled ? 'rgba(100, 100, 100, 0.3)' : '#f1c40f';
+        ctx.font = 'bold 12px "Segoe UI", sans-serif';
+        ctx.fillText(`[${qwerLabels[i]}]`, laneX + laneWidth / 2, laneTopY - 4);
         ctx.restore();
 
         // X for disabled lanes
@@ -182,45 +187,47 @@ export function drawNoteDistributionOverlay(gameState) {
     }
     ctx.restore();
 
-    // Buttons
+    // Buttons area - Launch + Cancel
     const buttonY = laneBottomY + 40;
-    const buttonWidth = 120;
+    const buttonWidth = 140;
     const buttonHeight = 40;
     const buttonSpacing = 20;
 
-    // Cancel button
+    // Cancel button (left)
     const cancelX = canvas.width / 2 - buttonWidth - buttonSpacing / 2;
     ctx.save();
     ctx.fillStyle = '#e74c3c';
-    // PERFORMANCE: Use lighter shadow for buttons
-    // ctx.shadowColor = '#e74c3c';
-    // ctx.shadowBlur = 10;
     ctx.beginPath();
     ctx.roundRect(cancelX, buttonY, buttonWidth, buttonHeight, 8);
     ctx.fill();
     ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 16px "Segoe UI", sans-serif';
+    ctx.font = 'bold 14px "Segoe UI", sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('Cancel', cancelX + buttonWidth / 2, buttonY + buttonHeight / 2);
+    ctx.fillText('Cancel (Esc)', cancelX + buttonWidth / 2, buttonY + buttonHeight / 2);
     ctx.restore();
 
-    // Confirm button
+    // Launch button (right) - only if notes assigned
     if (gameState.assignedNotes.length > 0) {
-        const confirmX = canvas.width / 2 + buttonSpacing / 2;
+        const launchX = canvas.width / 2 + buttonSpacing / 2;
         ctx.save();
         ctx.fillStyle = '#2ecc71';
-        // PERFORMANCE: Use lighter shadow for buttons
-        // ctx.shadowColor = '#2ecc71';
-        // ctx.shadowBlur = 10;
         ctx.beginPath();
-        ctx.roundRect(confirmX, buttonY, buttonWidth, buttonHeight, 8);
+        ctx.roundRect(launchX, buttonY, buttonWidth, buttonHeight, 8);
         ctx.fill();
         ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 16px "Segoe UI", sans-serif';
+        ctx.font = 'bold 14px "Segoe UI", sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText('Confirm', confirmX + buttonWidth / 2, buttonY + buttonHeight / 2);
+        ctx.fillText('⚡ Launch (Space)', launchX + buttonWidth / 2, buttonY + buttonHeight / 2);
+        ctx.restore();
+
+        // Hint
+        ctx.save();
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+        ctx.font = '12px "Segoe UI", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(`Auto-launches at ${maxNotes} notes · Space to launch early`, canvas.width / 2, buttonY + buttonHeight + 18);
         ctx.restore();
     }
 }

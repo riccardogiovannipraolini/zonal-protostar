@@ -1,6 +1,6 @@
 // ===== INPUT HANDLING =====
 
-import { CARD } from '../data/cards.js';
+import { CARD, STAMINA } from '../data/cards.js';
 import { getCanvas, layout, invalidateLayout } from '../render/canvas.js';
 import { attemptParry, startRallyPhase } from './rally/index.js';
 import { resetGameState } from './state.js';
@@ -53,7 +53,7 @@ function handleClick(event) {
     }
 
     // RALLY - parry attempt
-    if (gameState.phase === 'RALLY' && gameState.currentNote && gameState.timingIndicator) {
+    if (gameState.phase === 'RALLY') {
         attemptParry();
         return;
     }
@@ -155,39 +155,29 @@ function handleIdentityCardClick(x, y) {
  */
 function handleDistributionClick(x, y) {
     const selectedCard = gameState.playerCards[gameState.selectedCard];
-    const aliveLanes = gameState.enemyCards.filter(c => c.pv > 0).length;
-    // Allow stacking notes on same lane, so max notes is limited by NA and Stamina, not alive lanes count
-    const maxNotes = Math.min(selectedCard.na, gameState.playerStamina);
+    const maxNotes = Math.min(selectedCard.na, Math.floor(gameState.playerStamina / STAMINA.COST_PER_NOTE));
 
     const positions = layout.cardPositions;
-    const laneTopY = positions.enemy[0].y + CARD.HEIGHT + 30;
     const laneBottomY = positions.player[0].y - 30;
     const buttonY = laneBottomY + 40;
-    const buttonWidth = 120;
+    const buttonWidth = 140;
     const buttonHeight = 40;
     const buttonSpacing = 20;
     const cancelX = getCanvas().width / 2 - buttonWidth - buttonSpacing / 2;
-    const confirmX = getCanvas().width / 2 + buttonSpacing / 2;
 
     // Cancel button
     if (x >= cancelX && x <= cancelX + buttonWidth &&
         y >= buttonY && y <= buttonY + buttonHeight) {
-        gameState.phase = 'SELECTION';
-        gameState.selectedCard = null;
-        gameState.assignedNotes = [];
-        renderFn();
+        cancelDistribution();
         return;
     }
 
-    // Confirm button
+    // Launch button
     if (gameState.assignedNotes.length > 0) {
-        if (x >= confirmX && x <= confirmX + buttonWidth &&
+        const launchX = getCanvas().width / 2 + buttonSpacing / 2;
+        if (x >= launchX && x <= launchX + buttonWidth &&
             y >= buttonY && y <= buttonY + buttonHeight) {
-            // Consume stamina
-            gameState.playerStamina -= gameState.assignedNotes.length;
-            if (gameState.playerStamina < 0) gameState.playerStamina = 0;
-
-            startRallyPhase('player', gameState.selectedCard);
+            scheduleAutoLaunch();
             return;
         }
     }
@@ -199,8 +189,6 @@ function handleDistributionClick(x, y) {
             y >= lane.y && y <= lane.y + lane.height) {
 
             if (lane.disabled) return;
-
-            // Playable lanes rule check
             if (!isLanePlayable(gameState, i)) return;
 
             const notesInLane = gameState.assignedNotes.filter(n => n === i).length;
@@ -215,6 +203,11 @@ function handleDistributionClick(x, y) {
             }
 
             renderFn();
+
+            // Auto-launch if max notes reached
+            if (gameState.assignedNotes.length >= maxNotes && maxNotes > 0) {
+                scheduleAutoLaunch();
+            }
             return;
         }
     }
@@ -247,28 +240,98 @@ function handleContextMenu(event) {
     }
 }
 
+// --- Auto-launch timer ---
+let autoLaunchTimer = null;
+
+function scheduleAutoLaunch() {
+    // Cancel any pending auto-launch
+    if (autoLaunchTimer) clearTimeout(autoLaunchTimer);
+
+    autoLaunchTimer = setTimeout(() => {
+        autoLaunchTimer = null;
+        if (gameState.phase !== 'DISTRIBUTION' || gameState.assignedNotes.length === 0) return;
+
+        // Launch rally
+        gameState.playerStamina -= gameState.assignedNotes.length * STAMINA.COST_PER_NOTE;
+        if (gameState.playerStamina < 0) gameState.playerStamina = 0;
+        startRallyPhase('player', gameState.selectedCard);
+    }, 150);
+}
+
+function cancelDistribution() {
+    if (autoLaunchTimer) { clearTimeout(autoLaunchTimer); autoLaunchTimer = null; }
+    gameState.phase = 'SELECTION';
+    gameState.selectedCard = null;
+    gameState.assignedNotes = [];
+    renderFn();
+}
+
 /**
- * Handle keyboard input - QWER for lane-specific parry
+ * Handle keyboard input - QWER for all combat phases
  */
 function handleKeyDown(event) {
-    if (gameState.phase !== 'RALLY' || gameState.rallyState?.currentDefender !== 'player') {
+    const key = event.key.toLowerCase();
+    const keyToLane = { 'q': 0, 'w': 1, 'e': 2, 'r': 3 };
+    const lane = keyToLane[key];
+
+    // --- SPACE/ENTER: launch rally early ---
+    if ((key === ' ' || key === 'enter') && gameState.phase === 'DISTRIBUTION' && gameState.currentTurn === 'player') {
+        event.preventDefault();
+        if (gameState.assignedNotes.length > 0) {
+            scheduleAutoLaunch();
+        }
         return;
     }
 
-    // QWER = lanes 0-3
-    const keyToLane = { 'q': 0, 'w': 1, 'e': 2, 'r': 3 };
-    const key = event.key.toLowerCase();
-    const lane = keyToLane[key];
-
-    if (lane !== undefined) {
+    // --- ESC: cancel distribution ---
+    if (key === 'escape' && gameState.phase === 'DISTRIBUTION' && gameState.currentTurn === 'player') {
         event.preventDefault();
+        cancelDistribution();
+        return;
+    }
 
-        // Visual flash feedback (even if no note on that lane)
+    if (lane === undefined) return;
+
+    // --- SELECTION phase: QWER picks a card ---
+    if (gameState.phase === 'SELECTION' && gameState.currentTurn === 'player') {
+        event.preventDefault();
+        const card = gameState.playerCards[lane];
+        if (!card || card.pv <= 0) return; // Dead card
+
+        gameState.selectedCard = lane;
+        gameState.phase = 'DISTRIBUTION';
+        gameState.assignedNotes = [];
+        renderFn();
+        return;
+    }
+
+    // --- DISTRIBUTION phase: QWER assigns note to lane ---
+    if (gameState.phase === 'DISTRIBUTION' && gameState.currentTurn === 'player') {
+        event.preventDefault();
+        if (!isLanePlayable(gameState, lane)) return;
+
+        const selectedCard = gameState.playerCards[gameState.selectedCard];
+        const maxNotes = Math.min(selectedCard.na, Math.floor(gameState.playerStamina / STAMINA.COST_PER_NOTE));
+
+        if (gameState.assignedNotes.length < maxNotes) {
+            gameState.assignedNotes.push(lane);
+            // Visual flash
+            gameState.laneFlash = { lane, startTime: Date.now() };
+            renderFn();
+
+            // Auto-launch if max reached
+            if (gameState.assignedNotes.length >= maxNotes && maxNotes > 0) {
+                scheduleAutoLaunch();
+            }
+        }
+        return;
+    }
+
+    // --- RALLY phase: QWER parries ---
+    if (gameState.phase === 'RALLY') {
+        event.preventDefault();
         gameState.laneFlash = { lane, startTime: Date.now() };
-
-        // Attempt parry on specific lane
         attemptParry(lane);
-
         renderFn();
     }
 }

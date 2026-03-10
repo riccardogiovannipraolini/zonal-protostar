@@ -80,7 +80,7 @@ export function animateNotes(gameState, renderFn, checkRallyCompleteFn, schedule
             }
 
             // AI parry when defending
-            if (gameState.rallyState.currentDefender === 'enemy' && !note.aiParryScheduled) {
+            if (note.direction === 'toEnemy' && !note.aiParryScheduled) {
                 note.aiParryScheduled = true;
                 if (scheduleAIParryFn) scheduleAIParryFn(note, remainingTime);
             }

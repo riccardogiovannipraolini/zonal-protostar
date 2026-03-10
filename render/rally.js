@@ -164,8 +164,7 @@ function drawNote(ctx, note) {
     const currentY = note.y !== undefined ? note.y :
         (note.startY + (note.endY - note.startY) * note.progress);
 
-    const baseNoteColor = (note.direction === 'toPlayer') ? '#e67e22' : '#9b59b6';
-    const noteColor = getNoteColorWithIntensity(baseNoteColor, bounceCount);
+    const noteColor = getNoteColorWithIntensity(note.attackerColor || '#9b59b6', bounceCount);
 
     ctx.save();
     ctx.translate(currentX, currentY);
@@ -199,10 +198,11 @@ function drawNote(ctx, note) {
     ctx.arc(0, 0, 15 + glowRadius, 0, Math.PI * 2);
     ctx.fill();
 
-    // Speed lines at high speeds
-    if (bounceCount >= 2) {
+    // Speed lines (always for speed-boosted notes, otherwise at bounce >= 2)
+    const showTrail = note.hasSpeedBoost || bounceCount >= 2;
+    if (showTrail) {
         ctx.save();
-        const trailLength = bounceCount * 3;
+        const trailLength = note.hasSpeedBoost ? Math.max(3, bounceCount * 3) : bounceCount * 3;
         for (let i = 1; i <= trailLength; i++) {
             ctx.globalAlpha = (1 - i / trailLength) * 0.4;
             ctx.fillStyle = noteColor;
@@ -324,7 +324,7 @@ function drawTimingIndicator(ctx, gameState, note) {
 
     // 1. IMPERFECT DISC (Outer) - Yellow
     // Only visible if Stamina > 0
-    if (gameState.playerStamina > 0 && gameState.rallyState.currentDefender === 'player') {
+    if (gameState.playerStamina > 0 && note.direction === 'toPlayer') {
         ctx.save();
         ctx.strokeStyle = '#f1c40f'; // Yellow
         ctx.lineWidth = 4;
@@ -399,7 +399,7 @@ function drawTimingIndicator(ctx, gameState, note) {
     ctx.restore();
 
     // Parry Prompt
-    if (gameState.rallyState && gameState.rallyState.currentDefender === 'player') {
+    if (gameState.rallyState && note.direction === 'toPlayer') {
         ctx.save();
         ctx.fillStyle = '#ffffff';
         ctx.font = 'bold 12px "Segoe UI", sans-serif';
@@ -421,6 +421,66 @@ function drawTimingIndicator(ctx, gameState, note) {
 }
 
 /**
+ * Draw thorn/bramble VFX on debuffed lanes (Rovi passive)
+ */
+function drawLaneDebuffs(ctx, canvas, gameState) {
+    const debuffs = [
+        ...(gameState.playerLaneDebuffs || []),
+        ...(gameState.enemyLaneDebuffs || [])
+    ];
+
+    // Check player-side debuffs (enemy lanes that are thorned)
+    for (let side = 0; side < 2; side++) {
+        const laneDebuffs = side === 0 ? gameState.playerLaneDebuffs : gameState.enemyLaneDebuffs;
+        if (!laneDebuffs) continue;
+
+        for (let i = 0; i < 4; i++) {
+            if (!laneDebuffs[i] || laneDebuffs[i] <= 0) continue;
+
+            const cardPos = side === 0
+                ? layout.cardPositions.player[i]
+                : layout.cardPositions.enemy[i];
+            if (!cardPos) continue;
+
+            const x = cardPos.x + CARD.WIDTH / 2;
+            const yBase = side === 0 ? cardPos.y - 15 : cardPos.y + CARD.HEIGHT + 15;
+
+            ctx.save();
+            ctx.globalAlpha = 0.7;
+
+            // Animated thorn pattern
+            const time = Date.now() / 800;
+            const thornColor = '#8bc34a';
+
+            // Draw 3 thorn marks
+            for (let t = -1; t <= 1; t++) {
+                const tx = x + t * 20;
+                const ty = yBase + Math.sin(time + t) * 3;
+
+                ctx.strokeStyle = thornColor;
+                ctx.lineWidth = 2;
+
+                // X-shaped thorn
+                ctx.beginPath();
+                ctx.moveTo(tx - 5, ty - 5);
+                ctx.lineTo(tx + 5, ty + 5);
+                ctx.moveTo(tx + 5, ty - 5);
+                ctx.lineTo(tx - 5, ty + 5);
+                ctx.stroke();
+            }
+
+            // "THORNS" label
+            ctx.fillStyle = thornColor;
+            ctx.font = 'bold 9px "Segoe UI", sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('🌿 THORNS', x, yBase + 15);
+
+            ctx.restore();
+        }
+    }
+}
+
+/**
  * Draw rally phase visuals - handles multiple simultaneous notes
  */
 export function drawRallyPhase(gameState) {
@@ -431,6 +491,9 @@ export function drawRallyPhase(gameState) {
 
     // Draw lane indicators with QWER labels
     drawLaneIndicators(ctx, canvas, gameState);
+
+    // Draw thorn/debuff VFX on lanes
+    drawLaneDebuffs(ctx, canvas, gameState);
 
     // Optimization: Iterate directly instead of filter/map to avoid GC
     const notes = gameState.activeNotes || [];

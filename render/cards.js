@@ -261,18 +261,18 @@ export function drawCard(x, y, card, isEnemy, index, gameState) {
         if (cat) {
             ctx.save();
 
-            // Background circle for icon
+            // Background circle for category
             ctx.fillStyle = card.isChordActive ? '#ffd700' : 'rgba(0, 0, 0, 0.5)';
             ctx.beginPath();
-            ctx.arc(x + 15, y + 15, 10, 0, Math.PI * 2);
+            ctx.arc(x + 15, y + 15, 12, 0, Math.PI * 2);
             ctx.fill();
 
-            // Icon Text
+            // Category Text (DO, RE, SOL, SI...)
             ctx.fillStyle = card.isChordActive ? '#000000' : '#ffffff';
-            ctx.font = 'bold 10px "Segoe UI", sans-serif';
+            ctx.font = 'bold 8px "Segoe UI", sans-serif';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
-            ctx.fillText(cat.icon, x + 15, y + 15);
+            ctx.fillText(cat.name, x + 15, y + 15);
 
             // Active Chord Glow/Indicator
             if (card.isChordActive) {
@@ -318,6 +318,51 @@ export function drawAllCards(gameState) {
     // Identity Cards & Lanes
     drawHorizontalLanes(gameState);
     drawIdentityCards(gameState);
+
+    // Resurrect flash (Salvataggio passive)
+    if (gameState.resurrectFlash) {
+        const flash = gameState.resurrectFlash;
+        const elapsed = Date.now() - flash.startTime;
+        const duration = 1000; // 1 second
+
+        if (elapsed < duration) {
+            const ctx = getCtx();
+            const pos = flash.side === 'player'
+                ? positions.player[flash.cardIndex]
+                : positions.enemy[flash.cardIndex];
+
+            if (pos) {
+                const progress = elapsed / duration;
+                const radius = 20 + progress * 60;
+                const alpha = 1 - progress;
+
+                ctx.save();
+                ctx.strokeStyle = `rgba(255, 215, 0, ${alpha})`;
+                ctx.lineWidth = 4 - progress * 3;
+                ctx.beginPath();
+                ctx.arc(
+                    pos.x + CARD.WIDTH / 2,
+                    pos.y + CARD.HEIGHT / 2,
+                    radius, 0, Math.PI * 2
+                );
+                ctx.stroke();
+
+                // Inner glow
+                const gradient = ctx.createRadialGradient(
+                    pos.x + CARD.WIDTH / 2, pos.y + CARD.HEIGHT / 2, 0,
+                    pos.x + CARD.WIDTH / 2, pos.y + CARD.HEIGHT / 2, radius
+                );
+                gradient.addColorStop(0, `rgba(255, 215, 0, ${alpha * 0.3})`);
+                gradient.addColorStop(1, 'rgba(255, 215, 0, 0)');
+                ctx.fillStyle = gradient;
+                ctx.fill();
+
+                ctx.restore();
+            }
+        } else {
+            gameState.resurrectFlash = null;
+        }
+    }
 }
 
 /**
@@ -421,7 +466,7 @@ function drawSingleIdentityCard(pos, card, side) {
         ctx.font = 'italic 9px "Segoe UI", sans-serif';
         ctx.textAlign = 'center';
         ctx.fillText("CLICK ACTIVATE", pos.x + pos.width / 2, pos.y + pos.height + 12);
-        ctx.fillText(`(2 Stamina)`, pos.x + pos.width / 2, pos.y + pos.height + 22);
+        ctx.fillText(`(${card.cost} Stamina)`, pos.x + pos.width / 2, pos.y + pos.height + 22);
     }
 
     // Name

@@ -215,6 +215,43 @@ export function playStalemateSound() {
 }
 
 // =========================================
+// SFX - NOTE LAUNCH (per-card synthesized tones)
+// =========================================
+
+const CATEGORY_FREQUENCIES = {
+    'DO': 261.63,  // C4
+    'RE': 293.66,  // D4
+    'SOL': 392.00, // G4
+    'SI': 493.88   // B4
+};
+
+/**
+ * Play a short synthesized tone on rally launch, pitched to the card's category
+ */
+export function playNoteLaunchSFX(category) {
+    if (!audioContext) initAudio();
+    if (!audioContext) return;
+
+    const freq = CATEGORY_FREQUENCIES[category];
+    if (!freq) return;
+
+    const osc = audioContext.createOscillator();
+    const gain = audioContext.createGain();
+
+    osc.frequency.setValueAtTime(freq, audioContext.currentTime);
+    osc.type = 'sine';
+
+    gain.gain.setValueAtTime(0.25, audioContext.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.15);
+
+    osc.connect(gain);
+    gain.connect(audioContext.destination);
+
+    osc.start(audioContext.currentTime);
+    osc.stop(audioContext.currentTime + 0.15);
+}
+
+// =========================================
 // TENSION LOOP (Web Audio API - synthesized)
 // =========================================
 

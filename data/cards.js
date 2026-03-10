@@ -27,8 +27,8 @@ export const IDENTITY_CARDS = {
         id: 'SCUDO',
         name: 'Scudo Armonico',
         type: 'ACTIVE',
-        description: 'Spend 2 Stamina: Next 3 notes crossing get -50% speed. CD: 3.',
-        cost: 2,
+        description: 'Spend 4 Stamina: Next 3 notes crossing get -50% speed. CD: 3.',
+        cost: 4,
         cooldown: 3,
         effect: 'SHIELD',
         value: 0.5,
@@ -40,18 +40,22 @@ export const IDENTITY_CARDS = {
 export const PLAYER_CARDS = [
     {
         name: 'Virgil', pv: 3, maxPv: 3, na: 4, speed: 3, category: 'DO', requiredCategory: 'SOL',
+        noteColor: '#4fc3f7',
         passive: { id: 'LOCKED', name: '???', description: 'Passive not unlocked yet.' }
     },
     {
         name: 'Salvataggio', pv: 5, maxPv: 5, na: 1, speed: 2, category: 'SOL', requiredCategory: 'FA',
+        noteColor: '#ffd54f',
         passive: { id: 'RESURRECT', name: 'Capacità di Recupero', description: 'Resurrects the first destroyed ally with 1 PV. (Once per battle)' }
     },
     {
         name: 'Origami', pv: 2, maxPv: 2, na: 3, speed: 4, category: 'SI', requiredCategory: 'LA',
+        noteColor: '#ce93d8',
         passive: { id: 'SPEED_BOOST', name: 'Potenziamento Offensivo', description: 'Attacks have +30% speed.' }
     },
     {
         name: 'Rovi', pv: 2, maxPv: 2, na: 5, speed: 5, category: 'RE', requiredCategory: 'SI',
+        noteColor: '#ef5350',
         passive: { id: 'THORNS', name: 'Effetto sul Campo', description: 'When hit, slows enemy notes in this lane by 30% for the next turn.' }
     }
 ];
@@ -59,18 +63,22 @@ export const PLAYER_CARDS = [
 export const ENEMY_CARDS = [
     {
         name: 'Virgil', pv: 3, maxPv: 3, na: 4, speed: 3, category: 'DO', requiredCategory: 'SOL',
+        noteColor: '#4fc3f7',
         passive: { id: 'LOCKED', name: '???', description: 'Passive not unlocked yet.' }
     },
     {
         name: 'Salvataggio', pv: 5, maxPv: 5, na: 1, speed: 2, category: 'SOL', requiredCategory: 'FA',
+        noteColor: '#ffd54f',
         passive: { id: 'RESURRECT', name: 'Capacità di Recupero', description: 'Resurrects the first destroyed ally with 1 PV. (Once per battle)' }
     },
     {
         name: 'Origami', pv: 2, maxPv: 2, na: 3, speed: 4, category: 'SI', requiredCategory: 'LA',
+        noteColor: '#ce93d8',
         passive: { id: 'SPEED_BOOST', name: 'Potenziamento Offensivo', description: 'Attacks have +30% speed.' }
     },
     {
         name: 'Rovi', pv: 2, maxPv: 2, na: 5, speed: 5, category: 'RE', requiredCategory: 'SI',
+        noteColor: '#ef5350',
         passive: { id: 'THORNS', name: 'Effetto sul Campo', description: 'When hit, slows enemy notes in this lane by 30% for the next turn.' }
     }
 ];
@@ -78,7 +86,7 @@ export const ENEMY_CARDS = [
 
 // AI Configuration
 export const AI_CONFIG = {
-    parrySuccessRate: 0.7,       // 70% base chance to successfully parry (increased from 50%)
+    parrySuccessRate: 0.85,      // 85% base chance to successfully parry (increased from 70%)
     parryPenaltyPerBounce: 0.1,  // -10% per bounce (makes long rallies favor player)
     preferAliveTargets: true,    // Prefer lanes with alive player cards
     focusFireChance: 0.3,        // 30% chance to focus fire on one lane
@@ -105,7 +113,8 @@ export const RALLY = {
 // Stamina settings
 export const STAMINA = {
     MAX: 10,
-    REGEN_PER_TURN: 3
+    REGEN_PER_TURN: 3,
+    COST_PER_NOTE: 2     // Each note costs 2 stamina (doubled from 1)
 };
 
 // Visual configuration

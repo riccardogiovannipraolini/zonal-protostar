@@ -67,7 +67,9 @@ export function scheduleNoteSpawns(gameState, isPlayerAttacker, notesByLane, sta
                     bounceCount: 0,
                     resolved: false,
                     parryAttempted: false,
-                    missedParry: false
+                    missedParry: false,
+                    attackerColor: attackerCard.noteColor || '#9b59b6',
+                    hasSpeedBoost: !!(attackerCard.passive && attackerCard.passive.id === 'SPEED_BOOST')
                 };
 
                 gameState.activeNotes.push(note);
@@ -86,10 +88,10 @@ export function scheduleNoteSpawns(gameState, isPlayerAttacker, notesByLane, sta
  * Handle note impact (when note reaches target without parry)
  */
 export function handleNoteImpact(gameState, note, renderFn, checkRallyCompleteFn) {
-    const defenderSide = gameState.rallyState.currentDefender;
-    const defenderCards = defenderSide === 'player' ?
+    const targetSide = note.direction === 'toPlayer' ? 'player' : 'enemy';
+    const targetCards = targetSide === 'player' ?
         gameState.playerCards : gameState.enemyCards;
-    const targetCard = defenderCards[note.lane];
+    const targetCard = targetCards[note.lane];
 
     // Dead card = fizzle (no damage, note just disappears)
     if (!targetCard || targetCard.pv <= 0) {
@@ -99,10 +101,12 @@ export function handleNoteImpact(gameState, note, renderFn, checkRallyCompleteFn
         return;
     }
 
+    const damagedSide = note.direction === 'toPlayer' ? 'player' : 'enemy';
+
     gameState.rallyResults.push({
         lane: note.lane,
         result: 'HIT',
-        damagedSide: defenderSide
+        damagedSide: damagedSide
     });
 
     showImpactFeedback(gameState, 'HIT', note, renderFn);

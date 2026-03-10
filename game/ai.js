@@ -1,7 +1,7 @@
 // ===== AI TURN LOGIC =====
 // Enhanced AI with stamina handling, focus fire, and smart targeting
 
-import { AI_CONFIG } from '../data/cards.js';
+import { AI_CONFIG, STAMINA } from '../data/cards.js';
 import { startRallyPhase } from './rally/index.js';
 import { isLanePlayable } from './rules.js';
 
@@ -137,7 +137,7 @@ export function aiTurn() {
                 const aliveLanes = [0, 1, 2, 3].filter(lane => isLanePlayable(gameState, lane));
 
                 // Max notes = min of card's NA, available lanes, and AI stamina
-                const maxNotes = Math.min(aiCard.na, aliveLanes.length, gameState.enemyStamina);
+                const maxNotes = Math.min(aiCard.na, aliveLanes.length, Math.floor(gameState.enemyStamina / STAMINA.COST_PER_NOTE));
 
                 // Decide actual note count (may save stamina)
                 const noteCount = decideNoteCount(maxNotes);
@@ -146,7 +146,7 @@ export function aiTurn() {
                 gameState.assignedNotes = distributeNotes(noteCount, aliveLanes);
 
                 // Consume stamina
-                gameState.enemyStamina -= gameState.assignedNotes.length;
+                gameState.enemyStamina -= gameState.assignedNotes.length * STAMINA.COST_PER_NOTE;
                 if (gameState.enemyStamina < 0) gameState.enemyStamina = 0;
 
                 console.log('[AI] Assigned', gameState.assignedNotes.length, 'notes, stamina:', gameState.enemyStamina);

@@ -66,11 +66,12 @@ export function scheduleAIParryForNote(gameState, note, remainingTime, renderFn,
             }
         } else {
             // Failed parry = HIT
+            const damagedSide = note.direction === 'toPlayer' ? 'player' : 'enemy';
             showImpactFeedback(gameState, 'HIT', note, renderFn);
             gameState.rallyResults.push({
                 lane: note.lane,
                 result: 'HIT',
-                damagedSide: 'enemy'
+                damagedSide: damagedSide
             });
 
             setTimeout(() => {
@@ -102,7 +103,7 @@ export function attemptParryLogic(gameState, targetLane = null, renderFn, checkR
         !n.resolved &&
         !n.parryAttempted &&
         n.timingIndicator &&
-        gameState.rallyState.currentDefender === 'player' &&
+        n.direction === 'toPlayer' &&
         (targetLane === null || n.lane === targetLane)
     );
 
@@ -174,12 +175,12 @@ export function attemptParryLogic(gameState, targetLane = null, renderFn, checkR
         // Outside window OR inside imperfect window but 0 stamina
         // Effect: Damage + Rally Ends
 
-        const defenderSide = gameState.rallyState.currentDefender;
+        const damagedSide = note.direction === 'toPlayer' ? 'player' : 'enemy';
 
         gameState.rallyResults.push({
             lane: note.lane,
             result: 'HIT',
-            damagedSide: defenderSide
+            damagedSide: damagedSide
         });
         showImpactFeedback(gameState, 'HIT', note, renderFn);
 
